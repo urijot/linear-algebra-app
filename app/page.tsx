@@ -132,6 +132,19 @@ export default function LinearAlgebraPage() {
     return lines;
   }, []);
 
+  // ドット格子の生成
+  const dots = useMemo(() => {
+    const points = [];
+    for (let x = -GRID_SIZE; x <= GRID_SIZE; x += GRID_STEP) {
+      for (let y = -GRID_SIZE; y <= GRID_SIZE; y += GRID_STEP) {
+        // 原点は別途描画されているため除外
+        if (x === 0 && y === 0) continue;
+        points.push({ x, y });
+      }
+    }
+    return points;
+  }, []);
+
   // 変換後の基底ベクトル
   const transformedI = transformVector(matrix, { x: 1, y: 0 });
   const transformedJ = transformVector(matrix, { x: 0, y: 1 });
@@ -334,6 +347,28 @@ export default function LinearAlgebraPage() {
                     stroke={line.isAxis ? "#334155" : "#3b82f6"}
                     strokeWidth={line.isAxis ? 0.15 : 0.08}
                     strokeOpacity={line.isAxis ? 1 : 0.4}
+                  />
+                );
+              })}
+            </g>
+
+            {/* ドット格子 (Point Grid) */}
+            <g>
+              {dots.map((dot) => {
+                const tDot = transformVector(matrix, dot);
+                const svgPos = toSvg(tDot.x, tDot.y);
+                const isI = dot.x === 1 && dot.y === 0;
+                const isJ = dot.x === 0 && dot.y === 1;
+
+                return (
+                  <motion.circle
+                    key={`dot-${dot.x}-${dot.y}`}
+                    initial={false}
+                    animate={{ cx: svgPos.x, cy: svgPos.y }}
+                    transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                    r={isI || isJ ? 0.15 : 0.06}
+                    fill={isI ? "#fca5a5" : isJ ? "#86efac" : "#64748b"}
+                    opacity={isI || isJ ? 1 : 0.4}
                   />
                 );
               })}
