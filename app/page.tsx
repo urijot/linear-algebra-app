@@ -102,6 +102,63 @@ const analyzeMatrix = (m: Matrix): { title: string; description: string } => {
   };
 };
 
+// 固有値・固有ベクトルの計算
+const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | null => {
+  const trace = m.a + m.d;
+  const det = m.a * m.d - m.b * m.c;
+  const discriminant = trace * trace - 4 * det;
+
+  // 判別式が負の場合は複素数解（ここでは可視化しない）
+  if (discriminant < -0.0001) return null;
+
+  const sqrtD = Math.sqrt(Math.max(0, discriminant));
+  const l1 = (trace + sqrtD) / 2;
+  const l2 = (trace - sqrtD) / 2;
+
+  // 固有ベクトルの計算 (A - lambda I)v = 0
+  const getEigenVector = (lambda: number): Vector => {
+    // 対角行列 (b=0, c=0) の場合の特別処理
+    if (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6) {
+      // lambda が a に近ければ (1,0)、d に近ければ (0,1)
+      // 重解 (a=d) の場合は後続の処理で分離するが、ここでは基本軸を返す
+      if (Math.abs(lambda - m.a) < 1e-6) return { x: 1, y: 0 };
+      return { x: 0, y: 1 };
+    }
+
+    // 一般形:
+    // b != 0 なら x=b, y=lambda-a
+    if (Math.abs(m.b) > 1e-6) {
+      return { x: m.b, y: lambda - m.a };
+    }
+    // c != 0 なら x=lambda-d, y=c
+    if (Math.abs(m.c) > 1e-6) {
+      return { x: lambda - m.d, y: m.c };
+    }
+    
+    return { x: 0, y: 0 };
+  };
+
+  let v1 = getEigenVector(l1);
+  let v2 = getEigenVector(l2);
+
+  // 対角行列かつ重解の場合（単位行列など）は、直交する基底を強制的に割り当てる
+  if (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6 && Math.abs(l1 - l2) < 1e-6) {
+      v1 = { x: 1, y: 0 };
+      v2 = { x: 0, y: 1 };
+  }
+
+  // 正規化 (長さ1にする)
+  const normalize = (v: Vector) => {
+    const len = Math.sqrt(v.x * v.x + v.y * v.y);
+    return len < 1e-6 ? { x: 0, y: 0 } : { x: v.x / len, y: v.y / len };
+  };
+
+  return {
+    values: [l1, l2],
+    vectors: [normalize(v1), normalize(v2)],
+  };
+};
+
 // --- コンポーネント ---
 
 export default function LinearAlgebraPage() {
@@ -151,6 +208,9 @@ export default function LinearAlgebraPage() {
 
   // 解析結果
   const analysis = analyzeMatrix(matrix);
+  
+  // 固有値・固有ベクトルの計算
+  const eigenData = useMemo(() => calculateEigen(matrix), [matrix]);
 
   // 入力ハンドラ
   const handleInputChange = (key: keyof Matrix, value: string) => {
@@ -286,6 +346,21 @@ export default function LinearAlgebraPage() {
                 <div className="mt-3 pt-3 border-t border-blue-200 text-xs text-blue-700 font-mono">
                   det(A) = {(matrix.a * matrix.d - matrix.b * matrix.c).toFixed(3)}
                 </div>
+                
+                {/* 固有値情報の表示 */}
+                <div className="mt-2 text-xs text-blue-700 font-mono">
+                  {eigenData ? (
+                    <>
+                      <div>λ₁ = {eigenData.values[0].toFixed(2)}</div>
+                      <div>λ₂ = {eigenData.values[1].toFixed(2)}</div>
+                    </>
+                  ) : (
+                    <div className="text-slate-500 italic">
+                      固有値は複素数です
+                      <br />(回転成分が含まれています)
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -373,6 +448,50 @@ export default function LinearAlgebraPage() {
                 );
               })}
             </g>
+
+            {/* 固有ベクトル (Eigenvectors) */}
+            {eigenData && (
+              <g>
+                {eigenData.vectors.map((v, idx) => {
+                  // ゼロベクトルの場合は描画しない
+                  if (Math.abs(v.x) < 1e-6 && Math.abs(v.y) < 1e-6) return null;
+
+                  const color = idx === 0 ? "#eab308" : "#a855f7"; // 黄色 / 紫
+                  const svgV = toSvg(v.x, v.y);
+                  
+                  // ガイドライン用の座標（画面端まで伸ばす）
+                  const scale = VIEWBOX_SIZE * 2;
+                  const guideStart = toSvg(-v.x * scale, -v.y * scale);
+                  const guideEnd = toSvg(v.x * scale, v.y * scale);
+
+                  return (
+                    <React.Fragment key={`eigen-${idx}`}>
+                      {/* 無限に続くガイドライン (点線) */}
+                      <motion.line
+                        initial={false}
+                        animate={{
+                          x1: guideStart.x, y1: guideStart.y,
+                          x2: guideEnd.x, y2: guideEnd.y
+                        }}
+                        transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                        stroke={color}
+                        strokeWidth={0.05}
+                        strokeDasharray="0.2 0.2"
+                        opacity={0.6}
+                      />
+                      {/* 固有ベクトル本体 (矢印) */}
+                      <VectorArrow
+                        vector={v}
+                        color={color}
+                        label={`v${idx + 1}`}
+                        isHovered={false}
+                        onHover={() => {}}
+                      />
+                    </React.Fragment>
+                  );
+                })}
+              </g>
+            )}
 
             {/* 基底ベクトル i (赤) */}
             <VectorArrow
