@@ -1,65 +1,448 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { RefreshCcw, Info, MousePointer2, Maximize2, MoveDiagonal } from 'lucide-react';
+
+// --- 型定義 ---
+type Matrix = {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+};
+
+type Vector = {
+  x: number;
+  y: number;
+};
+
+// --- 定数 ---
+const GRID_SIZE = 10; // グリッドの範囲 (-10 ~ 10)
+const GRID_STEP = 1;  // グリッドの間隔
+const VIEWBOX_SIZE = 12; // 表示範囲
+
+// --- ヘルパー関数 ---
+
+// 数学座標(x, y)をSVG座標(x, y)に変換（Y軸を反転）
+const toSvg = (x: number, y: number) => ({ x: x, y: -y });
+
+// 行列とベクトルの積を計算
+const transformVector = (matrix: Matrix, vector: Vector): Vector => {
+  return {
+    x: matrix.a * vector.x + matrix.b * vector.y,
+    y: matrix.c * vector.x + matrix.d * vector.y,
+  };
+};
+
+// 行列の性質を分析して解説テキストを返す
+const analyzeMatrix = (m: Matrix): { title: string; description: string } => {
+  const det = m.a * m.d - m.b * m.c;
+  const epsilon = 0.001;
+  const isClose = (v1: number, v2: number) => Math.abs(v1 - v2) < epsilon;
+
+  if (isClose(det, 0)) {
+    return {
+      title: '特異行列 (Singular)',
+      description: '行列式が0です。空間が直線または点に潰れてしまい、逆変換ができません。',
+    };
+  }
+
+  if (isClose(m.a, 1) && isClose(m.b, 0) && isClose(m.c, 0) && isClose(m.d, 1)) {
+    return {
+      title: '単位行列 (Identity)',
+      description: '何も変化させない変換です。',
+    };
+  }
+
+  // 回転行列の判定: [[cos, -sin], [sin, cos]]
+  // a = d, b = -c, a^2 + c^2 = 1 (スケーリングなしの場合)
+  // ここでは回転成分が含まれているかを簡易判定
+  if (isClose(m.a, m.d) && isClose(m.b, -m.c) && !isClose(m.b, 0)) {
+    const angle = Math.atan2(m.c, m.a) * (180 / Math.PI);
+    return {
+      title: '回転 (Rotation)',
+      description: `原点を中心に約 ${Math.round(angle)}度 回転させる変換です（拡大縮小を含む場合があります）。`,
+    };
+  }
+
+  // 拡大縮小: b=0, c=0
+  if (isClose(m.b, 0) && isClose(m.c, 0)) {
+    if (isClose(m.a, m.d)) {
+      return {
+        title: '一様拡大・縮小 (Uniform Scaling)',
+        description: `全体を ${m.a.toFixed(2)}倍 に拡大・縮小します。`,
+      };
+    }
+    return {
+      title: '非一様拡大・縮小 (Non-uniform Scaling)',
+      description: `X軸方向に ${m.a}倍、Y軸方向に ${m.d}倍 します。`,
+    };
+  }
+
+  // 剪断 (Shear)
+  // X軸剪断: a=1, c=0, d=1, b!=0
+  if (isClose(m.a, 1) && isClose(m.c, 0) && isClose(m.d, 1) && !isClose(m.b, 0)) {
+    return {
+      title: '剪断 (Shear X)',
+      description: 'X軸方向に平行にズラす変換です（Y座標に依存してXが変化）。',
+    };
+  }
+  // Y軸剪断: a=1, b=0, d=1, c!=0
+  if (isClose(m.a, 1) && isClose(m.b, 0) && isClose(m.d, 1) && !isClose(m.c, 0)) {
+    return {
+      title: '剪断 (Shear Y)',
+      description: 'Y軸方向に平行にズラす変換です（X座標に依存してYが変化）。',
+    };
+  }
+
+  return {
+    title: '一般的な線形変換',
+    description: `行列式: ${det.toFixed(2)}。基底ベクトル i, j がそれぞれ新しい位置に移ります。`,
+  };
+};
+
+// --- コンポーネント ---
+
+export default function LinearAlgebraPage() {
+  const [matrix, setMatrix] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
+  const [hoveredVector, setHoveredVector] = useState<'i' | 'j' | null>(null);
+
+  // グリッド線の生成
+  const gridLines = useMemo(() => {
+    const lines = [];
+    // 垂直線 (x = k)
+    for (let x = -GRID_SIZE; x <= GRID_SIZE; x += GRID_STEP) {
+      lines.push({
+        key: `v${x}`,
+        start: { x, y: -GRID_SIZE },
+        end: { x, y: GRID_SIZE },
+        isAxis: x === 0,
+      });
+    }
+    // 水平線 (y = k)
+    for (let y = -GRID_SIZE; y <= GRID_SIZE; y += GRID_STEP) {
+      lines.push({
+        key: `h${y}`,
+        start: { x: -GRID_SIZE, y },
+        end: { x: GRID_SIZE, y },
+        isAxis: y === 0,
+      });
+    }
+    return lines;
+  }, []);
+
+  // 変換後の基底ベクトル
+  const transformedI = transformVector(matrix, { x: 1, y: 0 });
+  const transformedJ = transformVector(matrix, { x: 0, y: 1 });
+
+  // 解析結果
+  const analysis = analyzeMatrix(matrix);
+
+  // 入力ハンドラ
+  const handleInputChange = (key: keyof Matrix, value: string) => {
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+      setMatrix((prev) => ({ ...prev, [key]: num }));
+    } else if (value === '' || value === '-') {
+       // 入力途中を許容するための処理（実際にはstateをstringで持つか、onBlurで確定する方がUXが良いが、プロトタイプとして簡易実装）
+    }
+  };
+
+  // プリセット適用
+  const applyPreset = (type: 'identity' | 'rotate90' | 'scale2' | 'shearX') => {
+    switch (type) {
+      case 'identity':
+        setMatrix({ a: 1, b: 0, c: 0, d: 1 });
+        break;
+      case 'rotate90':
+        setMatrix({ a: 0, b: -1, c: 1, d: 0 });
+        break;
+      case 'scale2':
+        setMatrix({ a: 2, b: 0, c: 0, d: 2 });
+        break;
+      case 'shearX':
+        setMatrix({ a: 1, b: 1, c: 0, d: 1 });
+        break;
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* 左カラム: コントロールパネル */}
+        <div className="lg:col-span-1 space-y-6">
+          <header>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">線形変換ビジュアライザー</h1>
+            <p className="text-slate-600 text-sm">
+              行列 $A$ による空間の変形を観察しましょう。
+            </p>
+          </header>
+
+          {/* 行列入力フォーム */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              変換行列 A
+            </h2>
+            <div className="flex items-center justify-center gap-4 text-2xl font-mono">
+              <span className="text-slate-400 select-none">{'('}</span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrix.a}
+                    onChange={(e) => handleInputChange('a', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  />
+                  <label className="text-xs text-center text-slate-400 mt-1">a</label>
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrix.b}
+                    onChange={(e) => handleInputChange('b', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  />
+                  <label className="text-xs text-center text-slate-400 mt-1">b</label>
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrix.c}
+                    onChange={(e) => handleInputChange('c', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  />
+                  <label className="text-xs text-center text-slate-400 mt-1">c</label>
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrix.d}
+                    onChange={(e) => handleInputChange('d', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  />
+                  <label className="text-xs text-center text-slate-400 mt-1">d</label>
+                </div>
+              </div>
+              <span className="text-slate-400 select-none">{')'}</span>
+            </div>
+          </div>
+
+          {/* プリセットボタン */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => applyPreset('identity')}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <RefreshCcw size={16} /> リセット
+            </button>
+            <button
+              onClick={() => applyPreset('rotate90')}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <RefreshCcw size={16} className="rotate-90" /> 90° 回転
+            </button>
+            <button
+              onClick={() => applyPreset('scale2')}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+            >
+              <Maximize2 size={16} /> 2倍 拡大
+            </button>
+            <button
+              onClick={() => applyPreset('shearX')}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+            >
+              <MoveDiagonal size={16} /> 剪断 (X)
+            </button>
+          </div>
+
+          {/* 解説パネル */}
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
+            <div className="flex items-start gap-3">
+              <Info className="text-blue-500 mt-0.5 shrink-0" size={20} />
+              <div>
+                <h3 className="font-bold text-blue-900 mb-1">{analysis.title}</h3>
+                <p className="text-sm text-blue-800 leading-relaxed">
+                  {analysis.description}
+                </p>
+                <div className="mt-3 pt-3 border-t border-blue-200 text-xs text-blue-700 font-mono">
+                  det(A) = {(matrix.a * matrix.d - matrix.b * matrix.c).toFixed(3)}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* 右カラム: ビジュアライゼーション */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative min-h-[400px] flex items-center justify-center">
+          <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur px-3 py-1.5 rounded-md text-xs font-mono text-slate-500 border border-slate-200">
+            Grid: 1 unit
+          </div>
+          
+          {/* SVG キャンバス */}
+          <svg
+            viewBox={`${-VIEWBOX_SIZE} ${-VIEWBOX_SIZE} ${VIEWBOX_SIZE * 2} ${VIEWBOX_SIZE * 2}`}
+            className="w-full h-full max-h-[600px] touch-none select-none"
+            preserveAspectRatio="xMidYMid meet"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            {/* 背景の固定グリッド (薄いグレー) */}
+            <g className="opacity-20">
+              {gridLines.map((line) => {
+                const start = toSvg(line.start.x, line.start.y);
+                const end = toSvg(line.end.x, line.end.y);
+                return (
+                  <line
+                    key={`bg-${line.key}`}
+                    x1={start.x}
+                    y1={start.y}
+                    x2={end.x}
+                    y2={end.y}
+                    stroke={line.isAxis ? "#000" : "#94a3b8"}
+                    strokeWidth={line.isAxis ? 0.1 : 0.05}
+                  />
+                );
+              })}
+            </g>
+
+            {/* 変換されるグリッド (アニメーション) */}
+            <g>
+              {gridLines.map((line) => {
+                // 始点と終点を変換
+                const tStart = transformVector(matrix, line.start);
+                const tEnd = transformVector(matrix, line.end);
+                
+                // SVG座標系へ
+                const svgStart = toSvg(tStart.x, tStart.y);
+                const svgEnd = toSvg(tEnd.x, tEnd.y);
+
+                return (
+                  <motion.line
+                    key={`fg-${line.key}`}
+                    initial={false}
+                    animate={{
+                      x1: svgStart.x,
+                      y1: svgStart.y,
+                      x2: svgEnd.x,
+                      y2: svgEnd.y,
+                    }}
+                    transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                    stroke={line.isAxis ? "#334155" : "#3b82f6"}
+                    strokeWidth={line.isAxis ? 0.15 : 0.08}
+                    strokeOpacity={line.isAxis ? 1 : 0.4}
+                  />
+                );
+              })}
+            </g>
+
+            {/* 基底ベクトル i (赤) */}
+            <VectorArrow
+              vector={transformedI}
+              color="#ef4444"
+              label="i"
+              isHovered={hoveredVector === 'i'}
+              onHover={(v) => setHoveredVector(v ? 'i' : null)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+            {/* 基底ベクトル j (緑) */}
+            <VectorArrow
+              vector={transformedJ}
+              color="#22c55e"
+              label="j"
+              isHovered={hoveredVector === 'j'}
+              onHover={(v) => setHoveredVector(v ? 'j' : null)}
+            />
+
+            {/* 原点ドット */}
+            <circle cx={0} cy={0} r={0.2} fill="#1e293b" />
+          </svg>
         </div>
-      </main>
+      </div>
     </div>
+  );
+}
+
+// --- サブコンポーネント: ベクトル矢印 ---
+function VectorArrow({
+  vector,
+  color,
+  label,
+  isHovered,
+  onHover
+}: {
+  vector: Vector;
+  color: string;
+  label: string;
+  isHovered: boolean;
+  onHover: (hover: boolean) => void;
+}) {
+  const svgEnd = toSvg(vector.x, vector.y);
+  const length = Math.sqrt(vector.x ** 2 + vector.y ** 2);
+  
+  // 矢印のヘッドサイズ調整（ベクトルが短すぎるときは小さくする）
+  const headSize = Math.min(0.5, length * 0.4); 
+  
+  // 矢印の角度計算
+  const angle = Math.atan2(-vector.y, vector.x); // SVG座標系での角度
+
+  return (
+    <motion.g
+      initial={false}
+      animate={{ x: 0, y: 0 }} // グループ全体の位置は固定、内部座標を動かす
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      className="cursor-pointer"
+    >
+      {/* メインの線 */}
+      <motion.line
+        x1={0}
+        y1={0}
+        animate={{ x2: svgEnd.x, y2: svgEnd.y }}
+        transition={{ type: "spring", stiffness: 200, damping: 25 }}
+        stroke={color}
+        strokeWidth={isHovered ? 0.2 : 0.12}
+        strokeLinecap="round"
+      />
+
+      {/* 矢印の先端 */}
+      <motion.path
+        d={`M -${headSize} -${headSize/2} L 0 0 L -${headSize} ${headSize/2}`}
+        animate={{
+          translateX: svgEnd.x,
+          translateY: svgEnd.y,
+          rotate: angle * (180 / Math.PI),
+        }}
+        transition={{ type: "spring", stiffness: 200, damping: 25 }}
+        fill="none"
+        stroke={color}
+        strokeWidth={isHovered ? 0.2 : 0.12}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* ラベル */}
+      <motion.text
+        animate={{
+          x: svgEnd.x + (vector.x >= 0 ? 0.3 : -0.8),
+          y: svgEnd.y + (vector.y >= 0 ? -0.3 : 0.8),
+        }}
+        transition={{ type: "spring", stiffness: 200, damping: 25 }}
+        fill={color}
+        fontSize="0.8"
+        fontWeight="bold"
+        style={{ pointerEvents: 'none' }}
+      >
+        {label}
+        {isHovered && (
+          <tspan fontSize="0.5" dx="0.2" fill="#64748b">
+            ({vector.x.toFixed(1)}, {vector.y.toFixed(1)})
+          </tspan>
+        )}
+      </motion.text>
+    </motion.g>
   );
 }
