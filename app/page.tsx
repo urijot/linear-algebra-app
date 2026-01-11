@@ -292,6 +292,33 @@ export default function LinearAlgebraPage() {
     return { P, D, Pinv };
   }, [eigenData]);
 
+  // 単位円と変換後の楕円のパス生成
+  const { unitCirclePath, transformedEllipsePath } = useMemo(() => {
+    const steps = 90; // 4度刻み
+    let unitPath = "";
+    let ellipsePath = "";
+
+    for (let i = 0; i <= steps; i++) {
+      const theta = (i / steps) * Math.PI * 2;
+      const cos = Math.cos(theta);
+      const sin = Math.sin(theta);
+      
+      // 単位円 (半径1)
+      const p = toSvg(cos, sin);
+      unitPath += `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`;
+
+      // 変換後の楕円
+      const t = transformVector(currentMatrix, { x: cos, y: sin });
+      const tp = toSvg(t.x, t.y);
+      ellipsePath += `${i === 0 ? "M" : "L"} ${tp.x} ${tp.y}`;
+    }
+
+    return {
+      unitCirclePath: unitPath + " Z",
+      transformedEllipsePath: ellipsePath + " Z"
+    };
+  }, [currentMatrix]);
+
   // 入力ハンドラ
   const handleInputChange = (target: 'A' | 'B', key: keyof Matrix, value: string) => {
     const num = parseFloat(value);
@@ -681,6 +708,28 @@ export default function LinearAlgebraPage() {
               >
                 Area: {Math.abs(det).toFixed(2)}
               </motion.text>
+            </g>
+
+            {/* 単位円 -> 楕円の可視化 */}
+            <g>
+              {/* 元の単位円 (点線) */}
+              <path
+                d={unitCirclePath}
+                fill="none"
+                stroke="#94a3b8"
+                strokeWidth="0.04"
+                strokeDasharray="0.1 0.1"
+                opacity="0.6"
+              />
+              {/* 変換後の楕円 */}
+              <motion.path
+                initial={false}
+                animate={{ d: transformedEllipsePath }}
+                transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                fill="rgba(139, 92, 246, 0.05)" // 薄い紫の塗りつぶし
+                stroke="#8b5cf6" // Violet
+                strokeWidth="0.08"
+              />
             </g>
 
             {/* ドット格子 (Point Grid) */}
