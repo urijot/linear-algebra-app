@@ -206,6 +206,18 @@ export default function LinearAlgebraPage() {
   const transformedI = transformVector(matrix, { x: 1, y: 0 });
   const transformedJ = transformVector(matrix, { x: 0, y: 1 });
 
+  // 平行四辺形の4点目と行列式（面積）
+  const transformedSum = {
+    x: transformedI.x + transformedJ.x,
+    y: transformedI.y + transformedJ.y,
+  };
+  const det = matrix.a * matrix.d - matrix.b * matrix.c;
+  const originSvg = toSvg(0, 0);
+  const iSvg = toSvg(transformedI.x, transformedI.y);
+  const sumSvg = toSvg(transformedSum.x, transformedSum.y);
+  const jSvg = toSvg(transformedJ.x, transformedJ.y);
+  const centerSvg = toSvg(transformedSum.x / 2, transformedSum.y / 2);
+
   // 解析結果
   const analysis = analyzeMatrix(matrix);
   
@@ -425,6 +437,38 @@ export default function LinearAlgebraPage() {
                   />
                 );
               })}
+            </g>
+
+            {/* 行列式（面積）の可視化: 平行四辺形 */}
+            <g>
+              <motion.path
+                initial={false}
+                animate={{
+                  d: `M ${originSvg.x} ${originSvg.y} L ${iSvg.x} ${iSvg.y} L ${sumSvg.x} ${sumSvg.y} L ${jSvg.x} ${jSvg.y} Z`,
+                  fill: det >= 0 ? "#3b82f6" : "#ef4444",
+                  stroke: det >= 0 ? "#3b82f6" : "#ef4444",
+                }}
+                transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                fillOpacity={0.2}
+                strokeWidth={0.05}
+                strokeDasharray="0.1 0.1"
+              />
+              <motion.text
+                initial={false}
+                animate={{
+                  x: centerSvg.x,
+                  y: centerSvg.y,
+                  fill: det >= 0 ? "#1e3a8a" : "#7f1d1d",
+                }}
+                transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                fontSize="0.35"
+                fontWeight="bold"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={{ pointerEvents: 'none', textShadow: '0px 0px 2px rgba(255,255,255,0.8)' }}
+              >
+                Area: {Math.abs(det).toFixed(2)}
+              </motion.text>
             </g>
 
             {/* ドット格子 (Point Grid) */}
