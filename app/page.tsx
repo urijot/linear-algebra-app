@@ -183,12 +183,76 @@ const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | nu
   };
 };
 
+// 特異値分解 (SVD) の計算: A = U * Sigma * V^T
+const calculateSVD = (m: Matrix) => {
+  // 1. A^T * A を計算 (対称行列になる)
+  const ata = {
+    a: m.a * m.a + m.c * m.c,
+    b: m.a * m.b + m.c * m.d,
+    c: m.a * m.b + m.c * m.d,
+    d: m.b * m.b + m.d * m.d
+  };
+
+  // 2. A^T * A の固有値・固有ベクトルを計算 -> V と Sigma^2
+  const eigen = calculateEigen(ata);
+  
+  // デフォルト値 (計算不能な場合)
+  let v1 = { x: 1, y: 0 };
+  let v2 = { x: 0, y: 1 };
+  let s1 = 0;
+  let s2 = 0;
+
+  if (eigen) {
+    // 固有値を降順にソート (s1 >= s2)
+    if (eigen.values[0] < eigen.values[1]) {
+      s1 = Math.sqrt(Math.max(0, eigen.values[1]));
+      s2 = Math.sqrt(Math.max(0, eigen.values[0]));
+      v1 = eigen.vectors[1];
+      v2 = eigen.vectors[0];
+    } else {
+      s1 = Math.sqrt(Math.max(0, eigen.values[0]));
+      s2 = Math.sqrt(Math.max(0, eigen.values[1]));
+      v1 = eigen.vectors[0];
+      v2 = eigen.vectors[1];
+    }
+  }
+
+  // 3. V と V^T を構成
+  const Vt = { a: v1.x, b: v1.y, c: v2.x, d: v2.y }; // 行に固有ベクトルを並べる
+
+  // 4. U を計算 (u_i = A * v_i / s_i)
+  const applyA = (v: Vector) => transformVector(m, v);
+  
+  let u1: Vector, u2: Vector;
+  
+  // 特異値が0に近い場合は、正規直交基底を適当に選ぶ
+  if (s1 > 1e-6) {
+    const av1 = applyA(v1);
+    u1 = { x: av1.x / s1, y: av1.y / s1 };
+  } else {
+    u1 = { x: 1, y: 0 };
+  }
+
+  if (s2 > 1e-6) {
+    const av2 = applyA(v2);
+    u2 = { x: av2.x / s2, y: av2.y / s2 };
+  } else {
+    u2 = { x: -u1.y, y: u1.x }; // u1に直交させる
+  }
+
+  const U = { a: u1.x, b: u2.x, c: u1.y, d: u2.y };
+  const Sigma = { a: s1, b: 0, c: 0, d: s2 };
+
+  return { U, Sigma, Vt, s1, s2 };
+};
+
 // --- コンポーネント ---
 
 export default function LinearAlgebraPage() {
   const [matrixA, setMatrixA] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
   const [matrixB, setMatrixB] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
   const [animationStep, setAnimationStep] = useState<'idle' | 'stepA' | 'stepBA'>('stepBA');
+  const [svdStep, setSvdStep] = useState<0 | 1 | 2 | 3>(0); // 0:off, 1:Vt, 2:Sigma*Vt, 3:U*Sigma*Vt
   const [hoveredVector, setHoveredVector] = useState<'i' | 'j' | null>(null);
 
   // グリッド線の生成
@@ -231,8 +295,19 @@ export default function LinearAlgebraPage() {
   // 合成行列の計算 (C = B * A)
   const matrixC = useMemo(() => multiplyMatrices(matrixB, matrixA), [matrixA, matrixB]);
 
+  // SVDの計算 (Matrix A に対して)
+  const svdData = useMemo(() => calculateSVD(matrixA), [matrixA]);
+
   // 現在表示すべき行列（アニメーション用）
   const currentMatrix = useMemo(() => {
+    // SVDアニメーション中の場合
+    if (svdStep > 0) {
+      if (svdStep === 1) return svdData.Vt; // Step 1: 回転 (V^T)
+      if (svdStep === 2) return multiplyMatrices(svdData.Sigma, svdData.Vt); // Step 2: 伸縮 (Sigma * V^T)
+      if (svdStep === 3) return matrixA; // Step 3: 回転 (U * Sigma * V^T = A)
+    }
+
+    // 通常の合成変換アニメーション
     switch (animationStep) {
       case 'idle': // 初期状態（単位行列）
         return { a: 1, b: 0, c: 0, d: 1 };
@@ -243,7 +318,7 @@ export default function LinearAlgebraPage() {
       default:
         return matrixC;
     }
-  }, [animationStep, matrixA, matrixC]);
+  }, [animationStep, svdStep, matrixA, matrixC, svdData]);
 
   // 変換後の基底ベクトル
   const transformedI = transformVector(currentMatrix, { x: 1, y: 0 });
@@ -330,6 +405,7 @@ export default function LinearAlgebraPage() {
       }
       // 編集中は最終結果を表示
       setAnimationStep('stepBA');
+      setSvdStep(0);
     } else if (value === '' || value === '-') {
        // 入力途中を許容するための処理（実際にはstateをstringで持つか、onBlurで確定する方がUXが良いが、プロトタイプとして簡易実装）
     }
@@ -344,6 +420,7 @@ export default function LinearAlgebraPage() {
     if (inv) {
       setMatrixB(inv);
       setAnimationStep('stepBA');
+      setSvdStep(0);
     }
   };
 
@@ -352,6 +429,7 @@ export default function LinearAlgebraPage() {
     // プリセット適用時はBをリセットし、Aに適用する
     setMatrixB({ a: 1, b: 0, c: 0, d: 1 });
     setAnimationStep('stepBA');
+    setSvdStep(0);
 
     switch (type) {
       case 'identity':
@@ -371,9 +449,19 @@ export default function LinearAlgebraPage() {
 
   // アニメーション再生
   const playAnimation = () => {
+    setSvdStep(0);
     setAnimationStep('idle');
     setTimeout(() => setAnimationStep('stepA'), 800);
     setTimeout(() => setAnimationStep('stepBA'), 2000);
+  };
+
+  // SVDアニメーション再生
+  const playSVD = () => {
+    setAnimationStep('idle'); // 通常アニメーションはリセット
+    setSvdStep(0);
+    setTimeout(() => setSvdStep(1), 500);  // V^T
+    setTimeout(() => setSvdStep(2), 2000); // Sigma
+    setTimeout(() => setSvdStep(3), 3500); // U
   };
 
   return (
@@ -517,6 +605,13 @@ export default function LinearAlgebraPage() {
               <Play size={18} fill="currentColor" /> 変換を再生 (Identity → A → BA)
             </button>
 
+            <button
+              onClick={playSVD}
+              className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm mb-2"
+            >
+              <Play size={18} fill="currentColor" /> SVD分解を再生 (回転 → 伸縮 → 回転)
+            </button>
+
             {/* 逆変換ボタン */}
             <button
               onClick={handleApplyInverse}
@@ -562,9 +657,15 @@ export default function LinearAlgebraPage() {
               <Info className="text-blue-500 mt-0.5 shrink-0" size={20} />
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-800">
-                    {animationStep === 'idle' ? '初期状態' : animationStep === 'stepA' ? '変換 A' : '合成変換 BA'}
-                  </span>
+                  {svdStep > 0 ? (
+                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-emerald-200 text-emerald-800">
+                      SVD: Step {svdStep} ({svdStep === 1 ? "回転 Vᵀ" : svdStep === 2 ? "伸縮 Σ" : "回転 U"})
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-800">
+                      {animationStep === 'idle' ? '初期状態' : animationStep === 'stepA' ? '変換 A' : '合成変換 BA'}
+                    </span>
+                  )}
                   <h3 className="font-bold text-blue-900">{analysis.title}</h3>
                 </div>
                 <p className="text-sm text-blue-800 leading-relaxed">
@@ -612,6 +713,31 @@ export default function LinearAlgebraPage() {
                     </div>
                   </div>
                 )}
+
+                {/* SVD分解の表示 */}
+                <div className="mt-4 pt-4 border-t border-blue-200">
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase mb-2">特異値分解 (SVD)</h4>
+                  <p className="text-xs text-emerald-900 mb-3 leading-relaxed">
+                    任意の行列は「回転(Vᵀ) → 伸縮(Σ) → 回転(U)」の3ステップで表現できます。
+                    <br/>
+                    特異値: σ₁={svdData.s1.toFixed(2)}, σ₂={svdData.s2.toFixed(2)}
+                  </p>
+                  
+                  <div className="flex flex-wrap items-center justify-center gap-1 overflow-x-auto pb-2">
+                    <MatrixTex m={matrixA} />
+                    <span className="text-emerald-800 font-bold mx-1">=</span>
+                    <MatrixTex m={svdData.U} />
+                    <MatrixTex m={svdData.Sigma} />
+                    <MatrixTex m={svdData.Vt} />
+                  </div>
+                  <div className="flex justify-center gap-10 text-[10px] text-emerald-600 font-mono">
+                    <span className="w-16 text-center">A</span>
+                    <span className="w-16 text-center">U (回転)</span>
+                    <span className="w-16 text-center">Σ (伸縮)</span>
+                    <span className="w-16 text-center">Vᵀ (回転)</span>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
