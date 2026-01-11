@@ -45,6 +45,20 @@ const multiplyMatrices = (m1: Matrix, m2: Matrix): Matrix => {
   };
 };
 
+// 逆行列を計算 (Inverse Matrix)
+const invertMatrix = (m: Matrix): Matrix | null => {
+  const det = m.a * m.d - m.b * m.c;
+  // 行列式が0に近い場合は逆行列が存在しない
+  if (Math.abs(det) < 1e-6) return null;
+  const invDet = 1 / det;
+  return {
+    a: m.d * invDet,
+    b: -m.b * invDet,
+    c: -m.c * invDet,
+    d: m.a * invDet,
+  };
+};
+
 // 行列の性質を分析して解説テキストを返す
 const analyzeMatrix = (m: Matrix): { title: string; description: string } => {
   const det = m.a * m.d - m.b * m.c;
@@ -253,6 +267,31 @@ export default function LinearAlgebraPage() {
   // 固有値・固有ベクトルの計算
   const eigenData = useMemo(() => calculateEigen(currentMatrix), [currentMatrix]);
 
+  // 固有値分解の計算 (A = PDP^-1)
+  const diagonalization = useMemo(() => {
+    if (!eigenData) return null;
+    
+    const [l1, l2] = eigenData.values;
+    const [v1, v2] = eigenData.vectors;
+    
+    // P = [v1 v2] (固有ベクトルを列に並べる)
+    const P: Matrix = {
+      a: v1.x, b: v2.x,
+      c: v1.y, d: v2.y
+    };
+    
+    // D = diag(l1, l2) (固有値を対角に並べる)
+    const D: Matrix = {
+      a: l1, b: 0,
+      c: 0, d: l2
+    };
+    
+    // Pの逆行列
+    const Pinv = invertMatrix(P);
+    
+    return { P, D, Pinv };
+  }, [eigenData]);
+
   // 入力ハンドラ
   const handleInputChange = (target: 'A' | 'B', key: keyof Matrix, value: string) => {
     const num = parseFloat(value);
@@ -266,6 +305,18 @@ export default function LinearAlgebraPage() {
       setAnimationStep('stepBA');
     } else if (value === '' || value === '-') {
        // 入力途中を許容するための処理（実際にはstateをstringで持つか、onBlurで確定する方がUXが良いが、プロトタイプとして簡易実装）
+    }
+  };
+
+  // 逆変換の適用ハンドラ
+  const detA = matrixA.a * matrixA.d - matrixA.b * matrixA.c;
+  const isSingularA = Math.abs(detA) < 1e-4;
+
+  const handleApplyInverse = () => {
+    const inv = invertMatrix(matrixA);
+    if (inv) {
+      setMatrixB(inv);
+      setAnimationStep('stepBA');
     }
   };
 
@@ -439,6 +490,19 @@ export default function LinearAlgebraPage() {
               <Play size={18} fill="currentColor" /> 変換を再生 (Identity → A → BA)
             </button>
 
+            {/* 逆変換ボタン */}
+            <button
+              onClick={handleApplyInverse}
+              disabled={isSingularA}
+              className={`col-span-2 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-colors shadow-sm mb-2 ${
+                isSingularA
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                  : "bg-purple-600 text-white hover:bg-purple-700"
+              }`}
+            >
+              {isSingularA ? "逆行列なし (det = 0)" : "逆変換を適用 (B = A⁻¹)"}
+            </button>
+
             <button
               onClick={() => applyPreset('identity')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
@@ -497,6 +561,30 @@ export default function LinearAlgebraPage() {
                     </div>
                   )}
                 </div>
+
+                {/* 固有値分解の表示 */}
+                {diagonalization && diagonalization.Pinv && (
+                  <div className="mt-4 pt-4 border-t border-blue-200">
+                    <h4 className="text-xs font-bold text-blue-900 uppercase mb-2">固有値分解 (Diagonalization)</h4>
+                    <p className="text-xs text-blue-800 mb-3 leading-relaxed">
+                      この行列は、固有ベクトルの方向に <span className="font-mono">λ₁, λ₂</span> 倍するだけの単純な動きに分解できます。
+                    </p>
+                    
+                    <div className="flex flex-wrap items-center justify-center gap-1 overflow-x-auto pb-2">
+                      <MatrixTex m={currentMatrix} />
+                      <span className="text-blue-800 font-bold mx-1">=</span>
+                      <MatrixTex m={diagonalization.P} />
+                      <MatrixTex m={diagonalization.D} />
+                      <MatrixTex m={diagonalization.Pinv} />
+                    </div>
+                    <div className="flex justify-center gap-10 text-[10px] text-blue-500 font-mono">
+                      <span className="w-16 text-center">A</span>
+                      <span className="w-16 text-center">P</span>
+                      <span className="w-16 text-center">D</span>
+                      <span className="w-16 text-center">P⁻¹</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -766,5 +854,21 @@ function VectorArrow({
         )}
       </motion.text>
     </motion.g>
+  );
+}
+
+// --- サブコンポーネント: 数式用行列表示 ---
+function MatrixTex({ m }: { m: Matrix }) {
+  return (
+    <div className="inline-flex items-center">
+      <div className="relative px-1.5 py-1 border-l border-r border-slate-800 rounded-[4px]">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-center font-mono text-[11px] leading-tight text-slate-800">
+          <div className="text-right min-w-[24px]">{m.a.toFixed(2)}</div>
+          <div className="text-right min-w-[24px]">{m.b.toFixed(2)}</div>
+          <div className="text-right min-w-[24px]">{m.c.toFixed(2)}</div>
+          <div className="text-right min-w-[24px]">{m.d.toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
   );
 }
