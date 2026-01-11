@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { RefreshCcw, Info, MousePointer2, Maximize2, MoveDiagonal } from 'lucide-react';
+import { RefreshCcw, Info, MousePointer2, Maximize2, MoveDiagonal, Play, ArrowRight } from 'lucide-react';
 
 // --- 型定義 ---
 type Matrix = {
@@ -32,6 +32,16 @@ const transformVector = (matrix: Matrix, vector: Vector): Vector => {
   return {
     x: matrix.a * vector.x + matrix.b * vector.y,
     y: matrix.c * vector.x + matrix.d * vector.y,
+  };
+};
+
+// 行列の積を計算 (C = B * A)
+const multiplyMatrices = (m1: Matrix, m2: Matrix): Matrix => {
+  return {
+    a: m1.a * m2.a + m1.b * m2.c,
+    b: m1.a * m2.b + m1.b * m2.d,
+    c: m1.c * m2.a + m1.d * m2.c,
+    d: m1.c * m2.b + m1.d * m2.d,
   };
 };
 
@@ -162,7 +172,9 @@ const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | nu
 // --- コンポーネント ---
 
 export default function LinearAlgebraPage() {
-  const [matrix, setMatrix] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
+  const [matrixA, setMatrixA] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
+  const [matrixB, setMatrixB] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
+  const [animationStep, setAnimationStep] = useState<'idle' | 'stepA' | 'stepBA'>('stepBA');
   const [hoveredVector, setHoveredVector] = useState<'i' | 'j' | null>(null);
 
   // グリッド線の生成
@@ -202,16 +214,33 @@ export default function LinearAlgebraPage() {
     return points;
   }, []);
 
+  // 合成行列の計算 (C = B * A)
+  const matrixC = useMemo(() => multiplyMatrices(matrixB, matrixA), [matrixA, matrixB]);
+
+  // 現在表示すべき行列（アニメーション用）
+  const currentMatrix = useMemo(() => {
+    switch (animationStep) {
+      case 'idle': // 初期状態（単位行列）
+        return { a: 1, b: 0, c: 0, d: 1 };
+      case 'stepA': // Aによる変換
+        return matrixA;
+      case 'stepBA': // B(A)による変換（最終結果）
+        return matrixC;
+      default:
+        return matrixC;
+    }
+  }, [animationStep, matrixA, matrixC]);
+
   // 変換後の基底ベクトル
-  const transformedI = transformVector(matrix, { x: 1, y: 0 });
-  const transformedJ = transformVector(matrix, { x: 0, y: 1 });
+  const transformedI = transformVector(currentMatrix, { x: 1, y: 0 });
+  const transformedJ = transformVector(currentMatrix, { x: 0, y: 1 });
 
   // 平行四辺形の4点目と行列式（面積）
   const transformedSum = {
     x: transformedI.x + transformedJ.x,
     y: transformedI.y + transformedJ.y,
   };
-  const det = matrix.a * matrix.d - matrix.b * matrix.c;
+  const det = currentMatrix.a * currentMatrix.d - currentMatrix.b * currentMatrix.c;
   const originSvg = toSvg(0, 0);
   const iSvg = toSvg(transformedI.x, transformedI.y);
   const sumSvg = toSvg(transformedSum.x, transformedSum.y);
@@ -219,16 +248,22 @@ export default function LinearAlgebraPage() {
   const centerSvg = toSvg(transformedSum.x / 2, transformedSum.y / 2);
 
   // 解析結果
-  const analysis = analyzeMatrix(matrix);
+  const analysis = analyzeMatrix(currentMatrix);
   
   // 固有値・固有ベクトルの計算
-  const eigenData = useMemo(() => calculateEigen(matrix), [matrix]);
+  const eigenData = useMemo(() => calculateEigen(currentMatrix), [currentMatrix]);
 
   // 入力ハンドラ
-  const handleInputChange = (key: keyof Matrix, value: string) => {
+  const handleInputChange = (target: 'A' | 'B', key: keyof Matrix, value: string) => {
     const num = parseFloat(value);
     if (!isNaN(num)) {
-      setMatrix((prev) => ({ ...prev, [key]: num }));
+      if (target === 'A') {
+        setMatrixA((prev) => ({ ...prev, [key]: num }));
+      } else {
+        setMatrixB((prev) => ({ ...prev, [key]: num }));
+      }
+      // 編集中は最終結果を表示
+      setAnimationStep('stepBA');
     } else if (value === '' || value === '-') {
        // 入力途中を許容するための処理（実際にはstateをstringで持つか、onBlurで確定する方がUXが良いが、プロトタイプとして簡易実装）
     }
@@ -236,20 +271,31 @@ export default function LinearAlgebraPage() {
 
   // プリセット適用
   const applyPreset = (type: 'identity' | 'rotate90' | 'scale2' | 'shearX') => {
+    // プリセット適用時はBをリセットし、Aに適用する
+    setMatrixB({ a: 1, b: 0, c: 0, d: 1 });
+    setAnimationStep('stepBA');
+
     switch (type) {
       case 'identity':
-        setMatrix({ a: 1, b: 0, c: 0, d: 1 });
+        setMatrixA({ a: 1, b: 0, c: 0, d: 1 });
         break;
       case 'rotate90':
-        setMatrix({ a: 0, b: -1, c: 1, d: 0 });
+        setMatrixA({ a: 0, b: -1, c: 1, d: 0 });
         break;
       case 'scale2':
-        setMatrix({ a: 2, b: 0, c: 0, d: 2 });
+        setMatrixA({ a: 2, b: 0, c: 0, d: 2 });
         break;
       case 'shearX':
-        setMatrix({ a: 1, b: 1, c: 0, d: 1 });
+        setMatrixA({ a: 1, b: 1, c: 0, d: 1 });
         break;
     }
+  };
+
+  // アニメーション再生
+  const playAnimation = () => {
+    setAnimationStep('idle');
+    setTimeout(() => setAnimationStep('stepA'), 800);
+    setTimeout(() => setAnimationStep('stepBA'), 2000);
   };
 
   return (
@@ -261,14 +307,14 @@ export default function LinearAlgebraPage() {
           <header>
             <h1 className="text-2xl font-bold text-slate-800 mb-2">線形変換ビジュアライザー</h1>
             <p className="text-slate-600 text-sm">
-              行列 $A$ による空間の変形を観察しましょう。
+              行列 $A$ で変換し、さらに行列 $B$ で変換する合成変換 ($C = BA$) を観察しましょう。
             </p>
           </header>
 
-          {/* 行列入力フォーム */}
+          {/* 行列入力フォーム A */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              変換行列 A
+              1. 変換行列 A (最初に適用)
             </h2>
             <div className="flex items-center justify-center gap-4 text-2xl font-mono">
               <span className="text-slate-400 select-none">{'('}</span>
@@ -277,8 +323,8 @@ export default function LinearAlgebraPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={matrix.a}
-                    onChange={(e) => handleInputChange('a', e.target.value)}
+                    value={matrixA.a}
+                    onChange={(e) => handleInputChange('A', 'a', e.target.value)}
                     className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   />
                   <label className="text-xs text-center text-slate-400 mt-1">a</label>
@@ -287,8 +333,8 @@ export default function LinearAlgebraPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={matrix.b}
-                    onChange={(e) => handleInputChange('b', e.target.value)}
+                    value={matrixA.b}
+                    onChange={(e) => handleInputChange('A', 'b', e.target.value)}
                     className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   />
                   <label className="text-xs text-center text-slate-400 mt-1">b</label>
@@ -297,8 +343,8 @@ export default function LinearAlgebraPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={matrix.c}
-                    onChange={(e) => handleInputChange('c', e.target.value)}
+                    value={matrixA.c}
+                    onChange={(e) => handleInputChange('A', 'c', e.target.value)}
                     className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   />
                   <label className="text-xs text-center text-slate-400 mt-1">c</label>
@@ -307,8 +353,8 @@ export default function LinearAlgebraPage() {
                   <input
                     type="number"
                     step="0.1"
-                    value={matrix.d}
-                    onChange={(e) => handleInputChange('d', e.target.value)}
+                    value={matrixA.d}
+                    onChange={(e) => handleInputChange('A', 'd', e.target.value)}
                     className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   />
                   <label className="text-xs text-center text-slate-400 mt-1">d</label>
@@ -318,31 +364,104 @@ export default function LinearAlgebraPage() {
             </div>
           </div>
 
+          {/* 行列入力フォーム B */}
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+              2. 変換行列 B (次に適用)
+            </h2>
+            <div className="flex items-center justify-center gap-4 text-2xl font-mono">
+              <span className="text-slate-400 select-none">{'('}</span>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrixB.a}
+                    onChange={(e) => handleInputChange('B', 'a', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrixB.b}
+                    onChange={(e) => handleInputChange('B', 'b', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrixB.c}
+                    onChange={(e) => handleInputChange('B', 'c', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={matrixB.d}
+                    onChange={(e) => handleInputChange('B', 'd', e.target.value)}
+                    className="w-16 h-12 text-center bg-slate-100 rounded-md border border-transparent focus:border-purple-500 focus:bg-white focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <span className="text-slate-400 select-none">{')'}</span>
+            </div>
+          </div>
+
+          {/* 合成行列 C の表示 */}
+          <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              合成行列 C = BA
+            </h2>
+            <div className="flex items-center justify-center gap-2 font-mono text-slate-700">
+              <span>(</span>
+              <div className="grid grid-cols-2 gap-x-4 text-lg">
+                <div className="text-right">{matrixC.a.toFixed(2)}</div>
+                <div className="text-right">{matrixC.b.toFixed(2)}</div>
+                <div className="text-right">{matrixC.c.toFixed(2)}</div>
+                <div className="text-right">{matrixC.d.toFixed(2)}</div>
+              </div>
+              <span>)</span>
+            </div>
+          </div>
+
           {/* プリセットボタン */}
           <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={playAnimation}
+              className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm mb-2"
+            >
+              <Play size={18} fill="currentColor" /> 変換を再生 (Identity → A → BA)
+            </button>
+
             <button
               onClick={() => applyPreset('identity')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <RefreshCcw size={16} /> リセット
+              <RefreshCcw size={16} /> Aをリセット
             </button>
             <button
               onClick={() => applyPreset('rotate90')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <RefreshCcw size={16} className="rotate-90" /> 90° 回転
+              <RefreshCcw size={16} className="rotate-90" /> A: 90° 回転
             </button>
             <button
               onClick={() => applyPreset('scale2')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <Maximize2 size={16} /> 2倍 拡大
+              <Maximize2 size={16} /> A: 2倍 拡大
             </button>
             <button
               onClick={() => applyPreset('shearX')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <MoveDiagonal size={16} /> 剪断 (X)
+              <MoveDiagonal size={16} /> A: 剪断 (X)
             </button>
           </div>
 
@@ -351,12 +470,17 @@ export default function LinearAlgebraPage() {
             <div className="flex items-start gap-3">
               <Info className="text-blue-500 mt-0.5 shrink-0" size={20} />
               <div>
-                <h3 className="font-bold text-blue-900 mb-1">{analysis.title}</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-800">
+                    {animationStep === 'idle' ? '初期状態' : animationStep === 'stepA' ? '変換 A' : '合成変換 BA'}
+                  </span>
+                  <h3 className="font-bold text-blue-900">{analysis.title}</h3>
+                </div>
                 <p className="text-sm text-blue-800 leading-relaxed">
                   {analysis.description}
                 </p>
                 <div className="mt-3 pt-3 border-t border-blue-200 text-xs text-blue-700 font-mono">
-                  det(A) = {(matrix.a * matrix.d - matrix.b * matrix.c).toFixed(3)}
+                  det = {det.toFixed(3)}
                 </div>
                 
                 {/* 固有値情報の表示 */}
@@ -413,8 +537,8 @@ export default function LinearAlgebraPage() {
             <g>
               {gridLines.map((line) => {
                 // 始点と終点を変換
-                const tStart = transformVector(matrix, line.start);
-                const tEnd = transformVector(matrix, line.end);
+                const tStart = transformVector(currentMatrix, line.start);
+                const tEnd = transformVector(currentMatrix, line.end);
                 
                 // SVG座標系へ
                 const svgStart = toSvg(tStart.x, tStart.y);
@@ -474,7 +598,7 @@ export default function LinearAlgebraPage() {
             {/* ドット格子 (Point Grid) */}
             <g>
               {dots.map((dot) => {
-                const tDot = transformVector(matrix, dot);
+                const tDot = transformVector(currentMatrix, dot);
                 const svgPos = toSvg(tDot.x, tDot.y);
                 const isI = dot.x === 1 && dot.y === 0;
                 const isJ = dot.x === 0 && dot.y === 1;
