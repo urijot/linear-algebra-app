@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { RefreshCcw, Info, MousePointer2, Maximize2, MoveDiagonal, Play, ArrowRight } from 'lucide-react';
 
-// --- 型定義 ---
+// --- Type Definitions ---
 type Matrix = {
   a: number;
   b: number;
@@ -17,17 +17,17 @@ type Vector = {
   y: number;
 };
 
-// --- 定数 ---
-const GRID_SIZE = 10; // グリッドの範囲 (-10 ~ 10)
-const GRID_STEP = 1;  // グリッドの間隔
-const VIEWBOX_SIZE = 12; // 表示範囲
+// --- Constants ---
+const GRID_SIZE = 10; // Grid range (-10 ~ 10)
+const GRID_STEP = 1;  // Grid step
+const VIEWBOX_SIZE = 12; // Viewbox size
 
-// --- ヘルパー関数 ---
+// --- Helper Functions ---
 
-// 数学座標(x, y)をSVG座標(x, y)に変換（Y軸を反転）
+// Convert math coordinates (x, y) to SVG coordinates (x, y) (flip Y axis)
 const toSvg = (x: number, y: number) => ({ x: x, y: -y });
 
-// 行列とベクトルの積を計算
+// Calculate matrix-vector product
 const transformVector = (matrix: Matrix, vector: Vector): Vector => {
   return {
     x: matrix.a * vector.x + matrix.b * vector.y,
@@ -35,7 +35,7 @@ const transformVector = (matrix: Matrix, vector: Vector): Vector => {
   };
 };
 
-// 行列の積を計算 (C = B * A)
+// Calculate matrix multiplication (C = B * A)
 const multiplyMatrices = (m1: Matrix, m2: Matrix): Matrix => {
   return {
     a: m1.a * m2.a + m1.b * m2.c,
@@ -45,10 +45,10 @@ const multiplyMatrices = (m1: Matrix, m2: Matrix): Matrix => {
   };
 };
 
-// 逆行列を計算 (Inverse Matrix)
+// Calculate inverse matrix
 const invertMatrix = (m: Matrix): Matrix | null => {
   const det = m.a * m.d - m.b * m.c;
-  // 行列式が0に近い場合は逆行列が存在しない
+  // If determinant is close to 0, inverse matrix does not exist
   if (Math.abs(det) < 1e-6) return null;
   const invDet = 1 / det;
   return {
@@ -59,7 +59,7 @@ const invertMatrix = (m: Matrix): Matrix | null => {
   };
 };
 
-// 行列の性質を分析して解説テキストを返す
+// Analyze matrix properties and return explanatory text
 const analyzeMatrix = (m: Matrix): { title: string; description: string } => {
   const det = m.a * m.d - m.b * m.c;
   const epsilon = 0.001;
@@ -67,94 +67,94 @@ const analyzeMatrix = (m: Matrix): { title: string; description: string } => {
 
   if (isClose(det, 0)) {
     return {
-      title: '特異行列 (Singular)',
-      description: '行列式が0です。空間が直線または点に潰れてしまい、逆変換ができません。',
+      title: 'Singular Matrix',
+      description: 'Determinant is 0. The space collapses into a line or a point, making inverse transformation impossible.',
     };
   }
 
   if (isClose(m.a, 1) && isClose(m.b, 0) && isClose(m.c, 0) && isClose(m.d, 1)) {
     return {
-      title: '単位行列 (Identity)',
-      description: '何も変化させない変換です。',
+      title: 'Identity Matrix',
+      description: 'A transformation that changes nothing.',
     };
   }
 
-  // 回転行列の判定: [[cos, -sin], [sin, cos]]
-  // a = d, b = -c, a^2 + c^2 = 1 (スケーリングなしの場合)
-  // ここでは回転成分が含まれているかを簡易判定
+  // Rotation matrix check: [[cos, -sin], [sin, cos]]
+  // a = d, b = -c, a^2 + c^2 = 1 (if no scaling)
+  // Simple check if rotation component is included
   if (isClose(m.a, m.d) && isClose(m.b, -m.c) && !isClose(m.b, 0)) {
     const angle = Math.atan2(m.c, m.a) * (180 / Math.PI);
     return {
-      title: '回転 (Rotation)',
-      description: `原点を中心に約 ${Math.round(angle)}度 回転させる変換です（拡大縮小を含む場合があります）。`,
+      title: 'Rotation',
+      description: `Rotates approximately ${Math.round(angle)} degrees around the origin (may include scaling).`,
     };
   }
 
-  // 拡大縮小: b=0, c=0
+  // Scaling: b=0, c=0
   if (isClose(m.b, 0) && isClose(m.c, 0)) {
     if (isClose(m.a, m.d)) {
       return {
-        title: '一様拡大・縮小 (Uniform Scaling)',
-        description: `全体を ${m.a.toFixed(2)}倍 に拡大・縮小します。`,
+        title: 'Uniform Scaling',
+        description: `Scales the entire space by ${m.a.toFixed(2)}x.`,
       };
     }
     return {
-      title: '非一様拡大・縮小 (Non-uniform Scaling)',
-      description: `X軸方向に ${m.a}倍、Y軸方向に ${m.d}倍 します。`,
+      title: 'Non-uniform Scaling',
+      description: `Scales by ${m.a}x along the X-axis and ${m.d}x along the Y-axis.`,
     };
   }
 
-  // 剪断 (Shear)
-  // X軸剪断: a=1, c=0, d=1, b!=0
+  // Shear
+  // Shear X: a=1, c=0, d=1, b!=0
   if (isClose(m.a, 1) && isClose(m.c, 0) && isClose(m.d, 1) && !isClose(m.b, 0)) {
     return {
-      title: '剪断 (Shear X)',
-      description: 'X軸方向に平行にズラす変換です（Y座標に依存してXが変化）。',
+      title: 'Shear X',
+      description: 'Shifts parallel to the X-axis (X changes depending on Y coordinate).',
     };
   }
-  // Y軸剪断: a=1, b=0, d=1, c!=0
+  // Shear Y: a=1, b=0, d=1, c!=0
   if (isClose(m.a, 1) && isClose(m.b, 0) && isClose(m.d, 1) && !isClose(m.c, 0)) {
     return {
-      title: '剪断 (Shear Y)',
-      description: 'Y軸方向に平行にズラす変換です（X座標に依存してYが変化）。',
+      title: 'Shear Y',
+      description: 'Shifts parallel to the Y-axis (Y changes depending on X coordinate).',
     };
   }
 
   return {
-    title: '一般的な線形変換',
-    description: `行列式: ${det.toFixed(2)}。基底ベクトル i, j がそれぞれ新しい位置に移ります。`,
+    title: 'General Linear Transformation',
+    description: `Determinant: ${det.toFixed(2)}. Basis vectors i and j move to new positions.`,
   };
 };
 
-// 固有値・固有ベクトルの計算
+// Calculate Eigenvalues and Eigenvectors
 const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | null => {
   const trace = m.a + m.d;
   const det = m.a * m.d - m.b * m.c;
   const discriminant = trace * trace - 4 * det;
 
-  // 判別式が負の場合は複素数解（ここでは可視化しない）
+  // If discriminant is negative, complex solutions (not visualized here)
   if (discriminant < -0.0001) return null;
 
   const sqrtD = Math.sqrt(Math.max(0, discriminant));
   const l1 = (trace + sqrtD) / 2;
   const l2 = (trace - sqrtD) / 2;
 
-  // 固有ベクトルの計算 (A - lambda I)v = 0
+  // Calculate eigenvector (A - lambda I)v = 0
   const getEigenVector = (lambda: number): Vector => {
-    // 対角行列 (b=0, c=0) の場合の特別処理
+    // Special handling for diagonal matrix (b=0, c=0)
     if (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6) {
-      // lambda が a に近ければ (1,0)、d に近ければ (0,1)
-      // 重解 (a=d) の場合は後続の処理で分離するが、ここでは基本軸を返す
+      // If lambda is close to a, return (1,0), if close to d, return (0,1)
+      // If repeated root (a=d), separated in subsequent processing, but return basic axis here
       if (Math.abs(lambda - m.a) < 1e-6) return { x: 1, y: 0 };
       return { x: 0, y: 1 };
     }
 
-    // 一般形:
-    // b != 0 なら x=b, y=lambda-a
+    // General form:
+    // If b != 0, x=b, y=lambda-a
     if (Math.abs(m.b) > 1e-6) {
       return { x: m.b, y: lambda - m.a };
     }
-    // c != 0 なら x=lambda-d, y=c
+    // If c != 0, x=lambda-d, y=c
     if (Math.abs(m.c) > 1e-6) {
       return { x: lambda - m.d, y: m.c };
     }
@@ -165,13 +165,13 @@ const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | nu
   let v1 = getEigenVector(l1);
   let v2 = getEigenVector(l2);
 
-  // 対角行列かつ重解の場合（単位行列など）は、直交する基底を強制的に割り当てる
+  // If diagonal matrix and repeated root (e.g., identity matrix), force orthogonal basis assignment
   if (Math.abs(m.b) < 1e-6 && Math.abs(m.c) < 1e-6 && Math.abs(l1 - l2) < 1e-6) {
       v1 = { x: 1, y: 0 };
       v2 = { x: 0, y: 1 };
   }
 
-  // 正規化 (長さ1にする)
+  // Normalize (make length 1)
   const normalize = (v: Vector) => {
     const len = Math.sqrt(v.x * v.x + v.y * v.y);
     return len < 1e-6 ? { x: 0, y: 0 } : { x: v.x / len, y: v.y / len };
@@ -183,9 +183,9 @@ const calculateEigen = (m: Matrix): { values: number[]; vectors: Vector[] } | nu
   };
 };
 
-// 特異値分解 (SVD) の計算: A = U * Sigma * V^T
+// Calculate Singular Value Decomposition (SVD): A = U * Sigma * V^T
 const calculateSVD = (m: Matrix) => {
-  // 1. A^T * A を計算 (対称行列になる)
+  // 1. Calculate A^T * A (becomes symmetric matrix)
   const ata = {
     a: m.a * m.a + m.c * m.c,
     b: m.a * m.b + m.c * m.d,
@@ -193,17 +193,17 @@ const calculateSVD = (m: Matrix) => {
     d: m.b * m.b + m.d * m.d
   };
 
-  // 2. A^T * A の固有値・固有ベクトルを計算 -> V と Sigma^2
+  // 2. Calculate eigenvalues/eigenvectors of A^T * A -> V and Sigma^2
   const eigen = calculateEigen(ata);
   
-  // デフォルト値 (計算不能な場合)
+  // Default values (if calculation fails)
   let v1 = { x: 1, y: 0 };
   let v2 = { x: 0, y: 1 };
   let s1 = 0;
   let s2 = 0;
 
   if (eigen) {
-    // 固有値を降順にソート (s1 >= s2)
+    // Sort eigenvalues in descending order (s1 >= s2)
     if (eigen.values[0] < eigen.values[1]) {
       s1 = Math.sqrt(Math.max(0, eigen.values[1]));
       s2 = Math.sqrt(Math.max(0, eigen.values[0]));
@@ -217,15 +217,15 @@ const calculateSVD = (m: Matrix) => {
     }
   }
 
-  // 3. V と V^T を構成
-  const Vt = { a: v1.x, b: v1.y, c: v2.x, d: v2.y }; // 行に固有ベクトルを並べる
+  // 3. Construct V and V^T
+  const Vt = { a: v1.x, b: v1.y, c: v2.x, d: v2.y }; // Arrange eigenvectors in rows
 
-  // 4. U を計算 (u_i = A * v_i / s_i)
+  // 4. Calculate U (u_i = A * v_i / s_i)
   const applyA = (v: Vector) => transformVector(m, v);
   
   let u1: Vector, u2: Vector;
   
-  // 特異値が0に近い場合は、正規直交基底を適当に選ぶ
+  // If singular value is close to 0, choose arbitrary orthonormal basis
   if (s1 > 1e-6) {
     const av1 = applyA(v1);
     u1 = { x: av1.x / s1, y: av1.y / s1 };
@@ -237,7 +237,7 @@ const calculateSVD = (m: Matrix) => {
     const av2 = applyA(v2);
     u2 = { x: av2.x / s2, y: av2.y / s2 };
   } else {
-    u2 = { x: -u1.y, y: u1.x }; // u1に直交させる
+    u2 = { x: -u1.y, y: u1.x }; // Make orthogonal to u1
   }
 
   const U = { a: u1.x, b: u2.x, c: u1.y, d: u2.y };
@@ -246,7 +246,7 @@ const calculateSVD = (m: Matrix) => {
   return { U, Sigma, Vt, s1, s2 };
 };
 
-// --- コンポーネント ---
+// --- Components ---
 
 export default function LinearAlgebraPage() {
   const [matrixA, setMatrixA] = useState<Matrix>({ a: 1, b: 0, c: 0, d: 1 });
@@ -255,10 +255,10 @@ export default function LinearAlgebraPage() {
   const [svdStep, setSvdStep] = useState<0 | 1 | 2 | 3>(0); // 0:off, 1:Vt, 2:Sigma*Vt, 3:U*Sigma*Vt
   const [hoveredVector, setHoveredVector] = useState<'i' | 'j' | null>(null);
 
-  // グリッド線の生成
+  // Generate grid lines
   const gridLines = useMemo(() => {
     const lines = [];
-    // 垂直線 (x = k)
+    // Vertical lines (x = k)
     for (let x = -GRID_SIZE; x <= GRID_SIZE; x += GRID_STEP) {
       lines.push({
         key: `v${x}`,
@@ -267,7 +267,7 @@ export default function LinearAlgebraPage() {
         isAxis: x === 0,
       });
     }
-    // 水平線 (y = k)
+    // Horizontal lines (y = k)
     for (let y = -GRID_SIZE; y <= GRID_SIZE; y += GRID_STEP) {
       lines.push({
         key: `h${y}`,
@@ -279,12 +279,12 @@ export default function LinearAlgebraPage() {
     return lines;
   }, []);
 
-  // ドット格子の生成
+  // Generate dot grid
   const dots = useMemo(() => {
     const points = [];
     for (let x = -GRID_SIZE; x <= GRID_SIZE; x += GRID_STEP) {
       for (let y = -GRID_SIZE; y <= GRID_SIZE; y += GRID_STEP) {
-        // 原点は別途描画されているため除外
+        // Exclude origin as it is drawn separately
         if (x === 0 && y === 0) continue;
         points.push({ x, y });
       }
@@ -292,39 +292,39 @@ export default function LinearAlgebraPage() {
     return points;
   }, []);
 
-  // 合成行列の計算 (C = B * A)
+  // Calculate composite matrix (C = B * A)
   const matrixC = useMemo(() => multiplyMatrices(matrixB, matrixA), [matrixA, matrixB]);
 
-  // SVDの計算 (Matrix A に対して)
+  // Calculate SVD (for Matrix A)
   const svdData = useMemo(() => calculateSVD(matrixA), [matrixA]);
 
-  // 現在表示すべき行列（アニメーション用）
+  // Current matrix to display (for animation)
   const currentMatrix = useMemo(() => {
-    // SVDアニメーション中の場合
+    // If SVD animation is active
     if (svdStep > 0) {
-      if (svdStep === 1) return svdData.Vt; // Step 1: 回転 (V^T)
-      if (svdStep === 2) return multiplyMatrices(svdData.Sigma, svdData.Vt); // Step 2: 伸縮 (Sigma * V^T)
-      if (svdStep === 3) return matrixA; // Step 3: 回転 (U * Sigma * V^T = A)
+      if (svdStep === 1) return svdData.Vt; // Step 1: Rotation (V^T)
+      if (svdStep === 2) return multiplyMatrices(svdData.Sigma, svdData.Vt); // Step 2: Scaling (Sigma * V^T)
+      if (svdStep === 3) return matrixA; // Step 3: Rotation (U * Sigma * V^T = A)
     }
 
-    // 通常の合成変換アニメーション
+    // Normal composite transformation animation
     switch (animationStep) {
-      case 'idle': // 初期状態（単位行列）
+      case 'idle': // Initial state (Identity matrix)
         return { a: 1, b: 0, c: 0, d: 1 };
-      case 'stepA': // Aによる変換
+      case 'stepA': // Transformation by A
         return matrixA;
-      case 'stepBA': // B(A)による変換（最終結果）
+      case 'stepBA': // Transformation by B(A) (Final result)
         return matrixC;
       default:
         return matrixC;
     }
   }, [animationStep, svdStep, matrixA, matrixC, svdData]);
 
-  // 変換後の基底ベクトル
+  // Transformed basis vectors
   const transformedI = transformVector(currentMatrix, { x: 1, y: 0 });
   const transformedJ = transformVector(currentMatrix, { x: 0, y: 1 });
 
-  // 平行四辺形の4点目と行列式（面積）
+  // 4th point of parallelogram and determinant (area)
   const transformedSum = {
     x: transformedI.x + transformedJ.x,
     y: transformedI.y + transformedJ.y,
@@ -336,40 +336,40 @@ export default function LinearAlgebraPage() {
   const jSvg = toSvg(transformedJ.x, transformedJ.y);
   const centerSvg = toSvg(transformedSum.x / 2, transformedSum.y / 2);
 
-  // 解析結果
+  // Analysis result
   const analysis = analyzeMatrix(currentMatrix);
   
-  // 固有値・固有ベクトルの計算
+  // Calculate Eigenvalues/Eigenvectors
   const eigenData = useMemo(() => calculateEigen(currentMatrix), [currentMatrix]);
 
-  // 固有値分解の計算 (A = PDP^-1)
+  // Calculate Eigendecomposition (A = PDP^-1)
   const diagonalization = useMemo(() => {
     if (!eigenData) return null;
     
     const [l1, l2] = eigenData.values;
     const [v1, v2] = eigenData.vectors;
     
-    // P = [v1 v2] (固有ベクトルを列に並べる)
+    // P = [v1 v2] (Arrange eigenvectors in columns)
     const P: Matrix = {
       a: v1.x, b: v2.x,
       c: v1.y, d: v2.y
     };
     
-    // D = diag(l1, l2) (固有値を対角に並べる)
+    // D = diag(l1, l2) (Arrange eigenvalues on diagonal)
     const D: Matrix = {
       a: l1, b: 0,
       c: 0, d: l2
     };
     
-    // Pの逆行列
+    // Inverse of P
     const Pinv = invertMatrix(P);
     
     return { P, D, Pinv };
   }, [eigenData]);
 
-  // 単位円と変換後の楕円のパス生成
+  // Generate paths for unit circle and transformed ellipse
   const { unitCirclePath, transformedEllipsePath } = useMemo(() => {
-    const steps = 90; // 4度刻み
+    const steps = 90; // 4 degree steps
     let unitPath = "";
     let ellipsePath = "";
 
@@ -378,11 +378,11 @@ export default function LinearAlgebraPage() {
       const cos = Math.cos(theta);
       const sin = Math.sin(theta);
       
-      // 単位円 (半径1)
+      // Unit circle (radius 1)
       const p = toSvg(cos, sin);
       unitPath += `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`;
 
-      // 変換後の楕円
+      // Transformed ellipse
       const t = transformVector(currentMatrix, { x: cos, y: sin });
       const tp = toSvg(t.x, t.y);
       ellipsePath += `${i === 0 ? "M" : "L"} ${tp.x} ${tp.y}`;
@@ -394,7 +394,7 @@ export default function LinearAlgebraPage() {
     };
   }, [currentMatrix]);
 
-  // 入力ハンドラ
+  // Input handler
   const handleInputChange = (target: 'A' | 'B', key: keyof Matrix, value: string) => {
     const num = parseFloat(value);
     if (!isNaN(num)) {
@@ -403,15 +403,15 @@ export default function LinearAlgebraPage() {
       } else {
         setMatrixB((prev) => ({ ...prev, [key]: num }));
       }
-      // 編集中は最終結果を表示
+      // Show final result during editing
       setAnimationStep('stepBA');
       setSvdStep(0);
     } else if (value === '' || value === '-') {
-       // 入力途中を許容するための処理（実際にはstateをstringで持つか、onBlurで確定する方がUXが良いが、プロトタイプとして簡易実装）
+       // Allow partial input...
     }
   };
 
-  // 逆変換の適用ハンドラ
+  // Apply inverse transformation handler
   const detA = matrixA.a * matrixA.d - matrixA.b * matrixA.c;
   const isSingularA = Math.abs(detA) < 1e-4;
 
@@ -424,9 +424,9 @@ export default function LinearAlgebraPage() {
     }
   };
 
-  // プリセット適用
+  // Apply preset
   const applyPreset = (type: 'identity' | 'rotate90' | 'scale2' | 'shearX') => {
-    // プリセット適用時はBをリセットし、Aに適用する
+    // Reset B and apply to A when applying preset
     setMatrixB({ a: 1, b: 0, c: 0, d: 1 });
     setAnimationStep('stepBA');
     setSvdStep(0);
@@ -447,7 +447,7 @@ export default function LinearAlgebraPage() {
     }
   };
 
-  // アニメーション再生
+  // Play animation
   const playAnimation = () => {
     setSvdStep(0);
     setAnimationStep('idle');
@@ -455,9 +455,9 @@ export default function LinearAlgebraPage() {
     setTimeout(() => setAnimationStep('stepBA'), 2000);
   };
 
-  // SVDアニメーション再生
+  // Play SVD animation
   const playSVD = () => {
-    setAnimationStep('idle'); // 通常アニメーションはリセット
+    setAnimationStep('idle'); // Reset normal animation
     setSvdStep(0);
     setTimeout(() => setSvdStep(1), 500);  // V^T
     setTimeout(() => setSvdStep(2), 2000); // Sigma
@@ -468,19 +468,19 @@ export default function LinearAlgebraPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* 左カラム: コントロールパネル */}
+        {/* Left column: Control panel */}
         <div className="lg:col-span-1 space-y-6">
           <header>
-            <h1 className="text-2xl font-bold text-slate-800 mb-2">線形変換ビジュアライザー</h1>
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">Linear Transformation Visualizer</h1>
             <p className="text-slate-600 text-sm">
-              行列 $A$ で変換し、さらに行列 $B$ で変換する合成変換 ($C = BA$) を観察しましょう。
+              Observe the composite transformation ($C = BA$) where matrix $A$ is applied first, followed by matrix $B$.
             </p>
           </header>
 
-          {/* 行列入力フォーム A */}
+          {/* Matrix Input A */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              1. 変換行列 A (最初に適用)
+              1. Transformation Matrix A (Applied First)
             </h2>
             <div className="flex items-center justify-center gap-4 text-2xl font-mono">
               <span className="text-slate-400 select-none">{'('}</span>
@@ -530,10 +530,10 @@ export default function LinearAlgebraPage() {
             </div>
           </div>
 
-          {/* 行列入力フォーム B */}
+          {/* Matrix Input B */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-              2. 変換行列 B (次に適用)
+              2. Transformation Matrix B (Applied Next)
             </h2>
             <div className="flex items-center justify-center gap-4 text-2xl font-mono">
               <span className="text-slate-400 select-none">{'('}</span>
@@ -579,10 +579,10 @@ export default function LinearAlgebraPage() {
             </div>
           </div>
 
-          {/* 合成行列 C の表示 */}
+          {/* Composite Matrix C */}
           <div className="bg-slate-100 p-4 rounded-xl border border-slate-200">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              合成行列 C = BA
+              Composite Matrix C = BA
             </h2>
             <div className="flex items-center justify-center gap-2 font-mono text-slate-700">
               <span>(</span>
@@ -596,23 +596,23 @@ export default function LinearAlgebraPage() {
             </div>
           </div>
 
-          {/* プリセットボタン */}
+          {/* Preset buttons */}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={playAnimation}
               className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm mb-2"
             >
-              <Play size={18} fill="currentColor" /> 変換を再生 (Identity → A → BA)
+              <Play size={18} fill="currentColor" /> Play Transformation (Identity → A → BA)
             </button>
 
             <button
               onClick={playSVD}
               className="col-span-2 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm mb-2"
             >
-              <Play size={18} fill="currentColor" /> SVD分解を再生 (回転 → 伸縮 → 回転)
+              <Play size={18} fill="currentColor" /> Play SVD (Rotation → Scaling → Rotation)
             </button>
 
-            {/* 逆変換ボタン */}
+            {/* Inverse Button */}
             <button
               onClick={handleApplyInverse}
               disabled={isSingularA}
@@ -622,36 +622,36 @@ export default function LinearAlgebraPage() {
                   : "bg-purple-600 text-white hover:bg-purple-700"
               }`}
             >
-              {isSingularA ? "逆行列なし (det = 0)" : "逆変換を適用 (B = A⁻¹)"}
+              {isSingularA ? "No Inverse (det = 0)" : "Apply Inverse (B = A⁻¹)"}
             </button>
 
             <button
               onClick={() => applyPreset('identity')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <RefreshCcw size={16} /> Aをリセット
+              <RefreshCcw size={16} /> Reset A
             </button>
             <button
               onClick={() => applyPreset('rotate90')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <RefreshCcw size={16} className="rotate-90" /> A: 90° 回転
+              <RefreshCcw size={16} className="rotate-90" /> A: Rotate 90°
             </button>
             <button
               onClick={() => applyPreset('scale2')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <Maximize2 size={16} /> A: 2倍 拡大
+              <Maximize2 size={16} /> A: Scale 2x
             </button>
             <button
               onClick={() => applyPreset('shearX')}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
             >
-              <MoveDiagonal size={16} /> A: 剪断 (X)
+              <MoveDiagonal size={16} /> A: Shear (X)
             </button>
           </div>
 
-          {/* 解説パネル */}
+          {/* Explanation panel */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
             <div className="flex items-start gap-3">
               <Info className="text-blue-500 mt-0.5 shrink-0" size={20} />
@@ -659,11 +659,11 @@ export default function LinearAlgebraPage() {
                 <div className="flex items-center gap-2 mb-1">
                   {svdStep > 0 ? (
                     <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-emerald-200 text-emerald-800">
-                      SVD: Step {svdStep} ({svdStep === 1 ? "回転 Vᵀ" : svdStep === 2 ? "伸縮 Σ" : "回転 U"})
+                      SVD: Step {svdStep} ({svdStep === 1 ? "Rotation Vᵀ" : svdStep === 2 ? "Scaling Σ" : "Rotation U"})
                     </span>
                   ) : (
                     <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-800">
-                      {animationStep === 'idle' ? '初期状態' : animationStep === 'stepA' ? '変換 A' : '合成変換 BA'}
+                      {animationStep === 'idle' ? 'Initial State' : animationStep === 'stepA' ? 'Transformation A' : 'Composite BA'}
                     </span>
                   )}
                   <h3 className="font-bold text-blue-900">{analysis.title}</h3>
@@ -675,7 +675,7 @@ export default function LinearAlgebraPage() {
                   det = {det.toFixed(3)}
                 </div>
                 
-                {/* 固有値情報の表示 */}
+                {/* Display eigenvalue information */}
                 <div className="mt-2 text-xs text-blue-700 font-mono">
                   {eigenData ? (
                     <>
@@ -684,18 +684,18 @@ export default function LinearAlgebraPage() {
                     </>
                   ) : (
                     <div className="text-slate-500 italic">
-                      固有値は複素数です
-                      <br />(回転成分が含まれています)
+                      Eigenvalues are complex
+                      <br />(Contains rotation component)
                     </div>
                   )}
                 </div>
 
-                {/* 固有値分解の表示 */}
+                {/* Display eigendecomposition */}
                 {diagonalization && diagonalization.Pinv && (
                   <div className="mt-4 pt-4 border-t border-blue-200">
-                    <h4 className="text-xs font-bold text-blue-900 uppercase mb-2">固有値分解 (Diagonalization)</h4>
+                    <h4 className="text-xs font-bold text-blue-900 uppercase mb-2">Eigendecomposition (Diagonalization)</h4>
                     <p className="text-xs text-blue-800 mb-3 leading-relaxed">
-                      この行列は、固有ベクトルの方向に <span className="font-mono">λ₁, λ₂</span> 倍するだけの単純な動きに分解できます。
+                      This matrix can be decomposed into simple scaling by <span className="font-mono">λ₁, λ₂</span> along the eigenvector directions.
                     </p>
                     
                     <div className="flex flex-wrap items-center justify-center gap-1 overflow-x-auto pb-2">
@@ -714,13 +714,13 @@ export default function LinearAlgebraPage() {
                   </div>
                 )}
 
-                {/* SVD分解の表示 */}
+                {/* Display SVD decomposition */}
                 <div className="mt-4 pt-4 border-t border-blue-200">
-                  <h4 className="text-xs font-bold text-emerald-800 uppercase mb-2">特異値分解 (SVD)</h4>
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase mb-2">Singular Value Decomposition (SVD)</h4>
                   <p className="text-xs text-emerald-900 mb-3 leading-relaxed">
-                    任意の行列は「回転(Vᵀ) → 伸縮(Σ) → 回転(U)」の3ステップで表現できます。
+                    Any matrix can be represented in 3 steps: "Rotation (Vᵀ) → Scaling (Σ) → Rotation (U)".
                     <br/>
-                    特異値: σ₁={svdData.s1.toFixed(2)}, σ₂={svdData.s2.toFixed(2)}
+                    Singular Values: σ₁={svdData.s1.toFixed(2)}, σ₂={svdData.s2.toFixed(2)}
                   </p>
                   
                   <div className="flex flex-wrap items-center justify-center gap-1 overflow-x-auto pb-2">
@@ -732,9 +732,9 @@ export default function LinearAlgebraPage() {
                   </div>
                   <div className="flex justify-center gap-10 text-[10px] text-emerald-600 font-mono">
                     <span className="w-16 text-center">A</span>
-                    <span className="w-16 text-center">U (回転)</span>
-                    <span className="w-16 text-center">Σ (伸縮)</span>
-                    <span className="w-16 text-center">Vᵀ (回転)</span>
+                    <span className="w-16 text-center">U (Rotation)</span>
+                    <span className="w-16 text-center">Σ (Scaling)</span>
+                    <span className="w-16 text-center">Vᵀ (Rotation)</span>
                   </div>
                 </div>
 
@@ -743,19 +743,19 @@ export default function LinearAlgebraPage() {
           </div>
         </div>
 
-        {/* 右カラム: ビジュアライゼーション */}
+        {/* Right column: Visualization */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative min-h-[400px] flex items-center justify-center">
           <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur px-3 py-1.5 rounded-md text-xs font-mono text-slate-500 border border-slate-200">
             Grid: 1 unit
           </div>
           
-          {/* SVG キャンバス */}
+          {/* SVG Canvas */}
           <svg
             viewBox={`${-VIEWBOX_SIZE} ${-VIEWBOX_SIZE} ${VIEWBOX_SIZE * 2} ${VIEWBOX_SIZE * 2}`}
             className="w-full h-full max-h-[600px] touch-none select-none"
             preserveAspectRatio="xMidYMid meet"
           >
-            {/* 背景の固定グリッド (薄いグレー) */}
+            {/* Background fixed grid (light gray) */}
             <g className="opacity-20">
               {gridLines.map((line) => {
                 const start = toSvg(line.start.x, line.start.y);
@@ -774,14 +774,14 @@ export default function LinearAlgebraPage() {
               })}
             </g>
 
-            {/* 変換されるグリッド (アニメーション) */}
+            {/* Transformed grid (animation) */}
             <g>
               {gridLines.map((line) => {
-                // 始点と終点を変換
+                // Transform start and end points
                 const tStart = transformVector(currentMatrix, line.start);
                 const tEnd = transformVector(currentMatrix, line.end);
                 
-                // SVG座標系へ
+                // To SVG coordinate system
                 const svgStart = toSvg(tStart.x, tStart.y);
                 const svgEnd = toSvg(tEnd.x, tEnd.y);
 
@@ -804,7 +804,7 @@ export default function LinearAlgebraPage() {
               })}
             </g>
 
-            {/* 行列式（面積）の可視化: 平行四辺形 */}
+            {/* Visualize determinant (area): Parallelogram */}
             <g>
               <motion.path
                 initial={false}
@@ -836,9 +836,9 @@ export default function LinearAlgebraPage() {
               </motion.text>
             </g>
 
-            {/* 単位円 -> 楕円の可視化 */}
+            {/* Visualize Unit Circle -> Ellipse */}
             <g>
-              {/* 元の単位円 (点線) */}
+              {/* Original unit circle (dotted) */}
               <path
                 d={unitCirclePath}
                 fill="none"
@@ -847,18 +847,18 @@ export default function LinearAlgebraPage() {
                 strokeDasharray="0.1 0.1"
                 opacity="0.6"
               />
-              {/* 変換後の楕円 */}
+              {/* Transformed ellipse */}
               <motion.path
                 initial={false}
                 animate={{ d: transformedEllipsePath }}
                 transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                fill="rgba(139, 92, 246, 0.05)" // 薄い紫の塗りつぶし
+                fill="rgba(139, 92, 246, 0.05)" // Light purple fill
                 stroke="#8b5cf6" // Violet
                 strokeWidth="0.08"
               />
             </g>
 
-            {/* ドット格子 (Point Grid) */}
+            {/* Point Grid */}
             <g>
               {dots.map((dot) => {
                 const tDot = transformVector(currentMatrix, dot);
@@ -880,24 +880,24 @@ export default function LinearAlgebraPage() {
               })}
             </g>
 
-            {/* 固有ベクトル (Eigenvectors) */}
+            {/* Eigenvectors */}
             {eigenData && (
               <g>
                 {eigenData.vectors.map((v, idx) => {
-                  // ゼロベクトルの場合は描画しない
+                  // Do not draw if zero vector
                   if (Math.abs(v.x) < 1e-6 && Math.abs(v.y) < 1e-6) return null;
 
-                  const color = idx === 0 ? "#eab308" : "#a855f7"; // 黄色 / 紫
+                  const color = idx === 0 ? "#eab308" : "#a855f7"; // Yellow / Purple
                   const svgV = toSvg(v.x, v.y);
                   
-                  // ガイドライン用の座標（画面端まで伸ばす）
+                  // Coordinates for guidelines (extend to screen edge)
                   const scale = VIEWBOX_SIZE * 2;
                   const guideStart = toSvg(-v.x * scale, -v.y * scale);
                   const guideEnd = toSvg(v.x * scale, v.y * scale);
 
                   return (
                     <React.Fragment key={`eigen-${idx}`}>
-                      {/* 無限に続くガイドライン (点線) */}
+                      {/* Infinite guidelines (dotted) */}
                       <motion.line
                         initial={false}
                         animate={{
@@ -910,7 +910,7 @@ export default function LinearAlgebraPage() {
                         strokeDasharray="0.2 0.2"
                         opacity={0.6}
                       />
-                      {/* 固有ベクトル本体 (矢印) */}
+                      {/* Eigenvector body (arrow) */}
                       <VectorArrow
                         vector={v}
                         color={color}
@@ -924,7 +924,7 @@ export default function LinearAlgebraPage() {
               </g>
             )}
 
-            {/* 基底ベクトル i (赤) */}
+            {/* Basis vector i (red) */}
             <VectorArrow
               vector={transformedI}
               color="#ef4444"
@@ -933,7 +933,7 @@ export default function LinearAlgebraPage() {
               onHover={(v) => setHoveredVector(v ? 'i' : null)}
             />
 
-            {/* 基底ベクトル j (緑) */}
+            {/* Basis vector j (green) */}
             <VectorArrow
               vector={transformedJ}
               color="#22c55e"
@@ -942,7 +942,7 @@ export default function LinearAlgebraPage() {
               onHover={(v) => setHoveredVector(v ? 'j' : null)}
             />
 
-            {/* 原点ドット */}
+            {/* Origin dot */}
             <circle cx={0} cy={0} r={0.2} fill="#1e293b" />
           </svg>
         </div>
@@ -951,7 +951,7 @@ export default function LinearAlgebraPage() {
   );
 }
 
-// --- サブコンポーネント: ベクトル矢印 ---
+// --- Subcomponent: Vector Arrow ---
 function VectorArrow({
   vector,
   color,
@@ -968,21 +968,21 @@ function VectorArrow({
   const svgEnd = toSvg(vector.x, vector.y);
   const length = Math.sqrt(vector.x ** 2 + vector.y ** 2);
   
-  // 矢印のヘッドサイズ調整（ベクトルが短すぎるときは小さくする）
+  // Adjust arrow head size (smaller if vector is too short)
   const headSize = Math.min(0.5, length * 0.4); 
   
-  // 矢印の角度計算
-  const angle = Math.atan2(-vector.y, vector.x); // SVG座標系での角度
+  // Calculate arrow angle
+  const angle = Math.atan2(-vector.y, vector.x); // Angle in SVG coordinate system
 
   return (
     <motion.g
       initial={false}
-      animate={{ x: 0, y: 0 }} // グループ全体の位置は固定、内部座標を動かす
+      animate={{ x: 0, y: 0 }} // Group position fixed, internal coordinates move
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       className="cursor-pointer"
     >
-      {/* メインの線 */}
+      {/* Main line */}
       <motion.line
         x1={0}
         y1={0}
@@ -993,7 +993,7 @@ function VectorArrow({
         strokeLinecap="round"
       />
 
-      {/* 矢印の先端 */}
+      {/* Arrow tip */}
       <motion.path
         d={`M -${headSize} -${headSize/2} L 0 0 L -${headSize} ${headSize/2}`}
         animate={{
@@ -1009,7 +1009,7 @@ function VectorArrow({
         strokeLinejoin="round"
       />
 
-      {/* ラベル */}
+      {/* Label */}
       <motion.text
         animate={{
           x: svgEnd.x + (vector.x >= 0 ? 0.3 : -0.8),
@@ -1032,7 +1032,7 @@ function VectorArrow({
   );
 }
 
-// --- サブコンポーネント: 数式用行列表示 ---
+// --- Subcomponent: Matrix Display for Math ---
 function MatrixTex({ m }: { m: Matrix }) {
   return (
     <div className="inline-flex items-center">
