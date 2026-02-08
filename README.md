@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Linear Algebra App
+
+An interactive web application built with Next.js to visualize 2D linear transformations, matrix multiplication, eigenvalues, and singular value decomposition (SVD).
+
+## Features
+
+- **Interactive Visualization**: See how linear transformations affect a 2D grid, unit circle, and basis vectors in real-time.
+- **Composite Transformations**: Explore the effect of applying Matrix A followed by Matrix B ($C = B \cdot A$).
+- **Matrix Analysis**:
+  - **Determinant**: Visualized as the area of the transformed parallelogram.
+  - **Eigenvalues & Eigenvectors**: Visual representation of invariant directions.
+  - **Eigendecomposition**: Breakdown of the matrix into $PDP^{-1}$.
+  - **Singular Value Decomposition (SVD)**: Breakdown into Rotation ($V^T$), Scaling ($\Sigma$), and Rotation ($U$).
+- **Animations**:
+  - **Transformation Flow**: Animate from Identity $\to$ A $\to$ BA.
+  - **SVD Animation**: Visualize the decomposition steps (Rotate $\to$ Scale $\to$ Rotate).
+- **Inverse Matrix**: Automatically calculate and apply the inverse transformation ($B = A^{-1}$).
+- **Presets**: Quickly apply common transformations like Rotation, Scaling, and Shear.
+
+## Tech Stack
+
+- **Framework**: [Next.js](https://nextjs.org/) (App Router)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Animation**: [Framer Motion](https://www.framer.com/motion/)
+- **Icons**: [Lucide React](https://lucide.dev/)
 
 ## Getting Started
 
-First, run the development server:
+1.  **Clone the repository**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+    ```bash
+    git clone <repository-url>
+    cd linear-algebra-app
+    ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2.  **Install dependencies**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+    ```bash
+    npm install
+    # or
+    yarn install
+    # or
+    pnpm install
+    ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3.  **Run the development server**
 
-## Learn More
+    ```bash
+    npm run dev
+    # or
+    yarn dev
+    # or
+    pnpm dev
+    ```
 
-To learn more about Next.js, take a look at the following resources:
+4.  **Open your browser**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+    Navigate to [http://localhost:3000](http://localhost:3000) to see the application.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1.  **Input Matrices**: Enter values for Matrix A and Matrix B in the control panel.
+2.  **Observe Results**: The grid on the right updates instantly. The "Composite Matrix C" shows the result of $B \cdot A$.
+3.  **Play Animations**: Use the "Play Transformation" or "Play SVD" buttons to watch the transformation unfold.
+4.  **Analyze**: Check the panel below the visualization for mathematical details like the determinant and eigenvalues.
