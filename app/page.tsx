@@ -373,6 +373,9 @@ export default function LinearAlgebraPage() {
     let unitPath = "";
     let ellipsePath = "";
 
+    // Fix hydration mismatch by fixing precision
+    const fmt = (n: number) => n.toFixed(6);
+
     for (let i = 0; i <= steps; i++) {
       const theta = (i / steps) * Math.PI * 2;
       const cos = Math.cos(theta);
@@ -380,12 +383,12 @@ export default function LinearAlgebraPage() {
       
       // Unit circle (radius 1)
       const p = toSvg(cos, sin);
-      unitPath += `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`;
+      unitPath += `${i === 0 ? "M" : "L"} ${fmt(p.x)} ${fmt(p.y)}`;
 
       // Transformed ellipse
       const t = transformVector(currentMatrix, { x: cos, y: sin });
       const tp = toSvg(t.x, t.y);
-      ellipsePath += `${i === 0 ? "M" : "L"} ${tp.x} ${tp.y}`;
+      ellipsePath += `${i === 0 ? "M" : "L"} ${fmt(tp.x)} ${fmt(tp.y)}`;
     }
 
     return {
@@ -465,15 +468,15 @@ export default function LinearAlgebraPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+      <div className="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-7xl">
         
         {/* Left column: Control panel */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           <header>
             <h1 className="text-2xl font-bold text-slate-800 mb-2">Linear Transformation Visualizer</h1>
             <p className="text-slate-600 text-sm">
-              Observe the composite transformation ($C = BA$) where matrix $A$ is applied first, followed by matrix $B$.
+　              Observe the composite transformation (<span className="font-serif italic">C</span> = <span className="font-serif italic">BA</span>) where matrix <span className="font-serif italic">A</span> is applied first, followed by matrix <span className="font-serif italic">B</span>.
             </p>
           </header>
 
@@ -650,6 +653,212 @@ export default function LinearAlgebraPage() {
               <MoveDiagonal size={16} /> A: Shear (X)
             </button>
           </div>
+        </div>
+
+        {/* Right column: Visualization */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative min-h-[400px] flex items-center justify-center">
+            <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur px-3 py-1.5 rounded-md text-xs font-mono text-slate-500 border border-slate-200">
+              Grid: 1 unit
+            </div>
+            
+            {/* SVG Canvas */}
+            <svg
+              viewBox={`${-VIEWBOX_SIZE} ${-VIEWBOX_SIZE} ${VIEWBOX_SIZE * 2} ${VIEWBOX_SIZE * 2}`}
+              className="w-full h-full max-h-[600px] touch-none select-none"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              {/* Background fixed grid (light gray) */}
+              <g className="opacity-20">
+                {gridLines.map((line) => {
+                  const start = toSvg(line.start.x, line.start.y);
+                  const end = toSvg(line.end.x, line.end.y);
+                  return (
+                    <line
+                      key={`bg-${line.key}`}
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      stroke={line.isAxis ? "#000" : "#94a3b8"}
+                      strokeWidth={line.isAxis ? 0.1 : 0.05}
+                    />
+                  );
+                })}
+              </g>
+
+              {/* Transformed grid (animation) */}
+              <g>
+                {gridLines.map((line) => {
+                  // Transform start and end points
+                  const tStart = transformVector(currentMatrix, line.start);
+                  const tEnd = transformVector(currentMatrix, line.end);
+                  
+                  // To SVG coordinate system
+                  const svgStart = toSvg(tStart.x, tStart.y);
+                  const svgEnd = toSvg(tEnd.x, tEnd.y);
+
+                  return (
+                    <motion.line
+                      key={`fg-${line.key}`}
+                      initial={false}
+                      animate={{
+                        x1: svgStart.x,
+                        y1: svgStart.y,
+                        x2: svgEnd.x,
+                        y2: svgEnd.y,
+                      }}
+                      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                      stroke={line.isAxis ? "#334155" : "#3b82f6"}
+                      strokeWidth={line.isAxis ? 0.15 : 0.08}
+                      strokeOpacity={line.isAxis ? 1 : 0.4}
+                    />
+                  );
+                })}
+              </g>
+
+              {/* Visualize determinant (area): Parallelogram */}
+              <g>
+                <motion.path
+                  initial={false}
+                  animate={{
+                    d: `M ${originSvg.x} ${originSvg.y} L ${iSvg.x} ${iSvg.y} L ${sumSvg.x} ${sumSvg.y} L ${jSvg.x} ${jSvg.y} Z`,
+                    fill: det >= 0 ? "#3b82f6" : "#ef4444",
+                    stroke: det >= 0 ? "#3b82f6" : "#ef4444",
+                  }}
+                  transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                  fillOpacity={0.2}
+                  strokeWidth={0.05}
+                  strokeDasharray="0.1 0.1"
+                />
+                <motion.text
+                  initial={false}
+                  animate={{
+                    x: centerSvg.x,
+                    y: centerSvg.y,
+                    fill: det >= 0 ? "#1e3a8a" : "#7f1d1d",
+                  }}
+                  transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                  fontSize="0.35"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  style={{ pointerEvents: 'none', textShadow: '0px 0px 2px rgba(255,255,255,0.8)' }}
+                >
+                  Area: {Math.abs(det).toFixed(2)}
+                </motion.text>
+              </g>
+
+              {/* Visualize Unit Circle -> Ellipse */}
+              <g>
+                {/* Original unit circle (dotted) */}
+                <path
+                  d={unitCirclePath}
+                  fill="none"
+                  stroke="#94a3b8"
+                  strokeWidth="0.04"
+                  strokeDasharray="0.1 0.1"
+                  opacity="0.6"
+                />
+                {/* Transformed ellipse */}
+                <motion.path
+                  initial={false}
+                  animate={{ d: transformedEllipsePath }}
+                  transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                  fill="rgba(139, 92, 246, 0.05)" // Light purple fill
+                  stroke="#8b5cf6" // Violet
+                  strokeWidth="0.08"
+                />
+              </g>
+
+              {/* Point Grid */}
+              <g>
+                {dots.map((dot) => {
+                  const tDot = transformVector(currentMatrix, dot);
+                  const svgPos = toSvg(tDot.x, tDot.y);
+                  const isI = dot.x === 1 && dot.y === 0;
+                  const isJ = dot.x === 0 && dot.y === 1;
+
+                  return (
+                    <motion.circle
+                      key={`dot-${dot.x}-${dot.y}`}
+                      initial={false}
+                      animate={{ cx: svgPos.x, cy: svgPos.y }}
+                      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                      r={isI || isJ ? 0.15 : 0.06}
+                      fill={isI ? "#fca5a5" : isJ ? "#86efac" : "#64748b"}
+                      opacity={isI || isJ ? 1 : 0.4}
+                    />
+                  );
+                })}
+              </g>
+
+              {/* Eigenvectors */}
+              {eigenData && (
+                <g>
+                  {eigenData.vectors.map((v, idx) => {
+                    // Do not draw if zero vector
+                    if (Math.abs(v.x) < 1e-6 && Math.abs(v.y) < 1e-6) return null;
+
+                    const color = idx === 0 ? "#eab308" : "#a855f7"; // Yellow / Purple
+                    const svgV = toSvg(v.x, v.y);
+                    
+                    // Coordinates for guidelines (extend to screen edge)
+                    const scale = VIEWBOX_SIZE * 2;
+                    const guideStart = toSvg(-v.x * scale, -v.y * scale);
+                    const guideEnd = toSvg(v.x * scale, v.y * scale);
+
+                    return (
+                      <React.Fragment key={`eigen-${idx}`}>
+                        {/* Infinite guidelines (dotted) */}
+                        <motion.line
+                          initial={false}
+                          animate={{
+                            x1: guideStart.x, y1: guideStart.y,
+                            x2: guideEnd.x, y2: guideEnd.y
+                          }}
+                          transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                          stroke={color}
+                          strokeWidth={0.05}
+                          strokeDasharray="0.2 0.2"
+                          opacity={0.6}
+                        />
+                        {/* Eigenvector body (arrow) */}
+                        <VectorArrow
+                          vector={v}
+                          color={color}
+                          label={`v${idx + 1}`}
+                          isHovered={false}
+                          onHover={() => {}}
+                        />
+                      </React.Fragment>
+                    );
+                  })}
+                </g>
+              )}
+
+              {/* Basis vector i (red) */}
+              <VectorArrow
+                vector={transformedI}
+                color="#ef4444"
+                label="i"
+                isHovered={hoveredVector === 'i'}
+                onHover={(v) => setHoveredVector(v ? 'i' : null)}
+              />
+
+              {/* Basis vector j (green) */}
+              <VectorArrow
+                vector={transformedJ}
+                color="#22c55e"
+                label="j"
+                isHovered={hoveredVector === 'j'}
+                onHover={(v) => setHoveredVector(v ? 'j' : null)}
+              />
+
+              {/* Origin dot */}
+              <circle cx={0} cy={0} r={0.2} fill="#1e293b" />
+            </svg>
+          </div>
 
           {/* Explanation panel */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-5">
@@ -741,210 +950,6 @@ export default function LinearAlgebraPage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Right column: Visualization */}
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden relative min-h-[400px] flex items-center justify-center">
-          <div className="absolute top-4 left-4 z-10 bg-white/80 backdrop-blur px-3 py-1.5 rounded-md text-xs font-mono text-slate-500 border border-slate-200">
-            Grid: 1 unit
-          </div>
-          
-          {/* SVG Canvas */}
-          <svg
-            viewBox={`${-VIEWBOX_SIZE} ${-VIEWBOX_SIZE} ${VIEWBOX_SIZE * 2} ${VIEWBOX_SIZE * 2}`}
-            className="w-full h-full max-h-[600px] touch-none select-none"
-            preserveAspectRatio="xMidYMid meet"
-          >
-            {/* Background fixed grid (light gray) */}
-            <g className="opacity-20">
-              {gridLines.map((line) => {
-                const start = toSvg(line.start.x, line.start.y);
-                const end = toSvg(line.end.x, line.end.y);
-                return (
-                  <line
-                    key={`bg-${line.key}`}
-                    x1={start.x}
-                    y1={start.y}
-                    x2={end.x}
-                    y2={end.y}
-                    stroke={line.isAxis ? "#000" : "#94a3b8"}
-                    strokeWidth={line.isAxis ? 0.1 : 0.05}
-                  />
-                );
-              })}
-            </g>
-
-            {/* Transformed grid (animation) */}
-            <g>
-              {gridLines.map((line) => {
-                // Transform start and end points
-                const tStart = transformVector(currentMatrix, line.start);
-                const tEnd = transformVector(currentMatrix, line.end);
-                
-                // To SVG coordinate system
-                const svgStart = toSvg(tStart.x, tStart.y);
-                const svgEnd = toSvg(tEnd.x, tEnd.y);
-
-                return (
-                  <motion.line
-                    key={`fg-${line.key}`}
-                    initial={false}
-                    animate={{
-                      x1: svgStart.x,
-                      y1: svgStart.y,
-                      x2: svgEnd.x,
-                      y2: svgEnd.y,
-                    }}
-                    transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                    stroke={line.isAxis ? "#334155" : "#3b82f6"}
-                    strokeWidth={line.isAxis ? 0.15 : 0.08}
-                    strokeOpacity={line.isAxis ? 1 : 0.4}
-                  />
-                );
-              })}
-            </g>
-
-            {/* Visualize determinant (area): Parallelogram */}
-            <g>
-              <motion.path
-                initial={false}
-                animate={{
-                  d: `M ${originSvg.x} ${originSvg.y} L ${iSvg.x} ${iSvg.y} L ${sumSvg.x} ${sumSvg.y} L ${jSvg.x} ${jSvg.y} Z`,
-                  fill: det >= 0 ? "#3b82f6" : "#ef4444",
-                  stroke: det >= 0 ? "#3b82f6" : "#ef4444",
-                }}
-                transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                fillOpacity={0.2}
-                strokeWidth={0.05}
-                strokeDasharray="0.1 0.1"
-              />
-              <motion.text
-                initial={false}
-                animate={{
-                  x: centerSvg.x,
-                  y: centerSvg.y,
-                  fill: det >= 0 ? "#1e3a8a" : "#7f1d1d",
-                }}
-                transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                fontSize="0.35"
-                fontWeight="bold"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                style={{ pointerEvents: 'none', textShadow: '0px 0px 2px rgba(255,255,255,0.8)' }}
-              >
-                Area: {Math.abs(det).toFixed(2)}
-              </motion.text>
-            </g>
-
-            {/* Visualize Unit Circle -> Ellipse */}
-            <g>
-              {/* Original unit circle (dotted) */}
-              <path
-                d={unitCirclePath}
-                fill="none"
-                stroke="#94a3b8"
-                strokeWidth="0.04"
-                strokeDasharray="0.1 0.1"
-                opacity="0.6"
-              />
-              {/* Transformed ellipse */}
-              <motion.path
-                initial={false}
-                animate={{ d: transformedEllipsePath }}
-                transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                fill="rgba(139, 92, 246, 0.05)" // Light purple fill
-                stroke="#8b5cf6" // Violet
-                strokeWidth="0.08"
-              />
-            </g>
-
-            {/* Point Grid */}
-            <g>
-              {dots.map((dot) => {
-                const tDot = transformVector(currentMatrix, dot);
-                const svgPos = toSvg(tDot.x, tDot.y);
-                const isI = dot.x === 1 && dot.y === 0;
-                const isJ = dot.x === 0 && dot.y === 1;
-
-                return (
-                  <motion.circle
-                    key={`dot-${dot.x}-${dot.y}`}
-                    initial={false}
-                    animate={{ cx: svgPos.x, cy: svgPos.y }}
-                    transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                    r={isI || isJ ? 0.15 : 0.06}
-                    fill={isI ? "#fca5a5" : isJ ? "#86efac" : "#64748b"}
-                    opacity={isI || isJ ? 1 : 0.4}
-                  />
-                );
-              })}
-            </g>
-
-            {/* Eigenvectors */}
-            {eigenData && (
-              <g>
-                {eigenData.vectors.map((v, idx) => {
-                  // Do not draw if zero vector
-                  if (Math.abs(v.x) < 1e-6 && Math.abs(v.y) < 1e-6) return null;
-
-                  const color = idx === 0 ? "#eab308" : "#a855f7"; // Yellow / Purple
-                  const svgV = toSvg(v.x, v.y);
-                  
-                  // Coordinates for guidelines (extend to screen edge)
-                  const scale = VIEWBOX_SIZE * 2;
-                  const guideStart = toSvg(-v.x * scale, -v.y * scale);
-                  const guideEnd = toSvg(v.x * scale, v.y * scale);
-
-                  return (
-                    <React.Fragment key={`eigen-${idx}`}>
-                      {/* Infinite guidelines (dotted) */}
-                      <motion.line
-                        initial={false}
-                        animate={{
-                          x1: guideStart.x, y1: guideStart.y,
-                          x2: guideEnd.x, y2: guideEnd.y
-                        }}
-                        transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                        stroke={color}
-                        strokeWidth={0.05}
-                        strokeDasharray="0.2 0.2"
-                        opacity={0.6}
-                      />
-                      {/* Eigenvector body (arrow) */}
-                      <VectorArrow
-                        vector={v}
-                        color={color}
-                        label={`v${idx + 1}`}
-                        isHovered={false}
-                        onHover={() => {}}
-                      />
-                    </React.Fragment>
-                  );
-                })}
-              </g>
-            )}
-
-            {/* Basis vector i (red) */}
-            <VectorArrow
-              vector={transformedI}
-              color="#ef4444"
-              label="i"
-              isHovered={hoveredVector === 'i'}
-              onHover={(v) => setHoveredVector(v ? 'i' : null)}
-            />
-
-            {/* Basis vector j (green) */}
-            <VectorArrow
-              vector={transformedJ}
-              color="#22c55e"
-              label="j"
-              isHovered={hoveredVector === 'j'}
-              onHover={(v) => setHoveredVector(v ? 'j' : null)}
-            />
-
-            {/* Origin dot */}
-            <circle cx={0} cy={0} r={0.2} fill="#1e293b" />
-          </svg>
         </div>
       </div>
     </div>
