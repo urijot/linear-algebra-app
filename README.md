@@ -2,6 +2,8 @@
 
 An interactive web application built with Next.js to visualize 2D linear transformations, matrix multiplication, eigenvalues, and singular value decomposition (SVD).
 
+**Live Demo:** [https://vercel.com/urijots-projects/linear-algebra-app](https://vercel.com/urijots-projects/linear-algebra-app)
+
 ## Features
 
 - **Interactive Visualization**: See how linear transformations affect a 2D grid, unit circle, and basis vectors in real-time.
