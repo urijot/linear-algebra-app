@@ -4,6 +4,10 @@ An interactive web application built with Next.js to visualize 2D linear transfo
 
 **Live Demo:** [https://vercel.com/urijots-projects/linear-algebra-app](https://vercel.com/urijots-projects/linear-algebra-app)
 
+## Motivation
+
+Coming from a non-STEM background, I built this project as a means to teach myself linear algebra. I found that visualizing abstract equations was key to grasping complex topics like eigenvalues and Singular Value Decomposition (SVD). I created this interactive tool to solidify my own understanding and to help other students and developers build a geometric intuition, bridging the gap between theory and visualization.
+
 ## Features
 
 - **Interactive Visualization**: See how linear transformations affect a 2D grid, unit circle, and basis vectors in real-time.
